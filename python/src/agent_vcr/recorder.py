@@ -45,6 +45,38 @@ from agent_vcr.core.session import SessionManager
 from agent_vcr.transport.sse import SSETransport
 from agent_vcr.transport.stdio import StdioTransport
 
+
+def _make_empty_recording(recorder: MCPRecorder) -> VCRRecording:
+    """Build a minimal valid VCR recording when stop is called before any session started.
+
+    This handles the case where a user presses Ctrl+C before any MCP client
+    connects and sends an 'initialize' request, so SessionManager is still idle.
+    """
+    recorded_at = datetime.fromtimestamp(
+        recorder._recording_start_time or time.time()
+    )
+    metadata = VCRMetadata(
+        version="1.0",
+        recorded_at=recorded_at,
+        transport=recorder.transport_type,
+        tags=recorder.metadata_tags,
+        server_command=recorder.server_command,
+        server_args=recorder.server_args,
+    )
+    init_request = JSONRPCRequest(jsonrpc="2.0", id=0, method="initialize", params={})
+    init_response = JSONRPCResponse(jsonrpc="2.0", id=0, result={"capabilities": {}})
+    session = VCRSession(
+        initialize_request=init_request,
+        initialize_response=init_response,
+        capabilities={},
+        interactions=[],
+    )
+    return VCRRecording(
+        format_version="1.0.0",
+        metadata=metadata,
+        session=session,
+    )
+
 logger = logging.getLogger(__name__)
 
 
@@ -225,8 +257,11 @@ class MCPRecorder:
         if self._transport:
             await self._transport.stop()
 
-        # Get final recording
-        recording = self._session_manager.stop_recording()
+        # Get final recording (or minimal placeholder if session never started, e.g. Ctrl+C before any client connected)
+        if self._session_manager.is_recording:
+            recording = self._session_manager.stop_recording()
+        else:
+            recording = _make_empty_recording(self)
 
         # Save to file
         output_path = Path(output_path)
