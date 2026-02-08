@@ -1,0 +1,105 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Environment and secrets — NEVER commit these
+.env
+.env.*
+.env.local
+.env.production
+.env.staging
+*.env
+!.env.example
+
+# API keys and credentials
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+credentials.json
+credentials.yaml
+credentials.yml
+secrets.json
+secrets.yaml
+secrets.yml
+*_secret*
+*_credentials*
+service-account*.json
+token.json
+oauth*.json
+
+# AWS
+.aws/
+aws-credentials
+
+# Cloud provider configs
+.gcloud/
+.azure/
+
+# SSH keys
+id_rsa
+id_ed25519
+*.pub
+
+# VCR recordings (users should choose to commit these explicitly)
+# Uncomment the next line if you want to ignore cassettes by default:
+# cassettes/
+# *.vcr
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# AI agent configs — keep local only
+CLAUDE.md
+claude.md
+.cursorrules
+cursorrules.md
+.cursor/
+
+# Launch/marketing materials — not for public repo
+launch/
