@@ -34,7 +34,7 @@ describe("MCPReplayer", () => {
     expect(response!.result).toEqual({});
   });
 
-  it("handleRequest returns null when no match (non-strict)", () => {
+  it("handleRequest returns JSON-RPC error when no match (non-strict)", () => {
     const replayer = new MCPReplayer({ recording: sampleRecording });
     const request = {
       jsonrpc: "2.0" as const,
@@ -43,7 +43,13 @@ describe("MCPReplayer", () => {
       params: {},
     };
     const response = replayer.handleRequest(request);
-    expect(response).toBeNull();
+    expect(response).not.toBeNull();
+    expect(response!.jsonrpc).toBe("2.0");
+    expect(response!.id).toBe(999);
+    expect(response!.error).toEqual({
+      code: -32601,
+      message: "No matching recorded interaction found for method 'unknown/method'",
+    });
   });
 
   it("handleRequest uses response override when set", () => {

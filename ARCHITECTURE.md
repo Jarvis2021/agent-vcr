@@ -2,7 +2,7 @@
 
 Agent VCR is a testing framework for the Model Context Protocol (MCP). It transparently records JSON-RPC 2.0 interactions between MCP clients and servers, then replays them deterministically for testing.
 
-This document describes the architecture of the Python implementation. The TypeScript source code mirrors the same structure but is not yet tested.
+This document describes the architecture of the Python implementation. The TypeScript source code mirrors the same structure and includes a full unit test suite.
 
 This document covers the system design, data flow, design decisions, known limitations, and future direction.
 
@@ -140,7 +140,11 @@ The replayer supports five strategies for matching incoming requests to recorded
 
 **Why callback-based transport?** Decoupling. The transport layer doesn't know about recording or replaying; it just forwards messages and invokes callbacks. This lets the same transport code serve both MCPRecorder and future use cases.
 
-**Why single-session recordings?** Simplicity. MCP sessions have a clear lifecycle (initialize → interact → close). Multi-session recordings would add complexity without clear benefit for the primary testing use case.
+**Why single-session recordings?** Simplicity. MCP sessions have a clear lifecycle (initialize → interact → close). Multi-session recordings would add complexity for the primary use case; for large-scale, multi-MCP, and agent-to-agent evolution see **[SCALING.md](SCALING.md)**.
+
+## Scaling: Multi-MCP and Agent-to-Agent
+
+The current design is single-session per recording. To scale to **large-scale**, **multi-MCP server**, and **agent-to-agent** flows, the repo adds optional metadata (`session_id`, `endpoint_id`, `agent_id`) and a documented roadmap. See **[SCALING.md](SCALING.md)** for the full plan (multi-session recorder, replay orchestrator, batch diff, indexing).
 
 ## Known Limitations and Future Work
 

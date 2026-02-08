@@ -449,6 +449,18 @@ class TestVCRRecording:
             == sample_recording.session.initialize_request.method
         )
 
+    def test_recording_save_atomic(self, sample_recording: VCRRecording, tmp_path: Path):
+        """Save uses atomic write (temp then replace); no .tmp left behind."""
+        vcr_file = tmp_path / "session.vcr"
+        sample_recording.save(str(vcr_file))
+
+        assert vcr_file.exists()
+        tmp_file = tmp_path / "session.vcr.tmp"
+        assert not tmp_file.exists(), "atomic save must replace temp; .tmp should not remain"
+
+        loaded = VCRRecording.load(str(vcr_file))
+        assert loaded.model_dump(mode="json") == sample_recording.model_dump(mode="json")
+
     def test_recording_to_json(self, sample_recording: VCRRecording):
         """Convert recording to JSON string."""
         json_str = sample_recording.to_json()

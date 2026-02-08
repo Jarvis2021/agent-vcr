@@ -10,7 +10,7 @@
 
 Agent VCR is a testing framework for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io). It transparently records all JSON-RPC 2.0 interactions between an MCP client and server, then replays them deterministically for testing — no real server needed.
 
-The Python implementation is complete and production-ready. A TypeScript/Node.js port exists as source code but is not yet tested — see [typescript/README.md](typescript/README.md) for current status.
+The Python implementation is complete and production-ready. A TypeScript/Node.js port is available with a full test suite — see [typescript/README.md](typescript/README.md).
 
 ## The Problem
 
@@ -375,6 +375,10 @@ The Python implementation is **complete and tested** (178 tests). The TypeScript
 
 **Cross-language recordings:** The `.vcr` format is plain JSON, so recordings created by Python should be loadable by the TypeScript implementation once it's tested.
 
+## Scaling (Multi-MCP, Agent-to-Agent)
+
+Today each recording is one client↔server session. For **large-scale**, **multi-MCP**, and **agent-to-agent** flows we provide optional metadata (`--session-id`, `--endpoint-id`, `--agent-id`) and a roadmap. See **[SCALING.md](SCALING.md)** for the design and phased evolution (multi-session recorder, replay orchestrator, batch diff).
+
 ## Architecture
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design, data flow diagrams, and design decisions.
@@ -417,8 +421,6 @@ typescript/src/
     └── vitest.ts      # Vitest integration
 ```
 
-> **Note:** TypeScript source files exist but have no tests. Consider it experimental.
-
 ## Development
 
 ### Python
@@ -451,15 +453,14 @@ mypy src/
 ```bash
 cd agent-vcr/typescript
 
-# Install dependencies
 npm install
-
-# Build
 npm run build
-
-# Note: No tests exist yet — adding tests is a priority contribution.
-# See CONTRIBUTING.md for how to help.
+npm test
 ```
+
+### Creating demo GIFs
+
+To record terminal GIFs for each of the 12 tutorial labs, use [asciinema](https://asciinema.org) and [agg](https://github.com/asciinema/agg). See **[demo/README-GIFS.md](demo/README-GIFS.md)** for instructions and **demo/make-lab-gifs.sh** for per-lab commands (`bash demo/make-lab-gifs.sh <1-12>`).
 
 ### Run all tests (Python + TypeScript)
 

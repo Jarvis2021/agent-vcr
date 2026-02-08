@@ -256,7 +256,7 @@ class TestMCPReplayerHandleRequest:
         assert "result" in response
 
     def test_handle_request_no_match(self, simple_recording: VCRRecording):
-        """Handle request with no matching interaction."""
+        """Handle request with no matching interaction returns JSON-RPC error, not None."""
         replayer = MCPReplayer(simple_recording)
 
         request = {
@@ -267,8 +267,13 @@ class TestMCPReplayerHandleRequest:
 
         response = replayer.handle_request(request)
 
-        assert "error" in response
+        assert response is not None
+        assert response["jsonrpc"] == "2.0"
         assert response["id"] == 999
+        assert "error" in response
+        assert response["error"]["code"] == -32601
+        assert "No recorded interaction matching" in response["error"]["message"]
+        assert "result" not in response
 
     def test_handle_request_error_response(
         self, error_response_recording: VCRRecording

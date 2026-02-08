@@ -28,8 +28,7 @@ cd agent-vcr/typescript
 
 npm install
 npm run build
-
-# Note: tests/ is currently empty — adding tests is a high-priority contribution.
+npm test
 ```
 
 See [typescript/README.md](typescript/README.md) for full TypeScript usage and API docs.
@@ -38,7 +37,7 @@ See [typescript/README.md](typescript/README.md) for full TypeScript usage and A
 
 **High-impact areas:**
 
-- **TypeScript tests** — The `typescript/` directory has source code but zero tests. Adding unit tests (Vitest) and integration tests with parity to the Python suite is the #1 priority contribution.
+- **TypeScript tests** — The `typescript/` directory has unit tests (Vitest). Adding integration tests and more coverage is welcome.
 - **More matching strategies** — Custom matchers, regex-based param matching, response template interpolation.
 - **Transport plugins** — WebSocket transport, HTTP/2, custom protocol adapters.
 - **Real-world cassettes** — Example `.vcr` recordings from popular MCP servers (filesystem, GitHub, Slack, etc.) for the test suite.

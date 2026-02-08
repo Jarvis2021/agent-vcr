@@ -88,6 +88,33 @@ def cli() -> None:
     is_flag=True,
     help="Send tutorial requests automatically and stop (no pasting). Stdio only.",
 )
+@click.option(
+    "--pending-timeout",
+    type=float,
+    default=60.0,
+    help="Evict pending requests with no response after this many seconds (0=disable). Default: 60.",
+)
+@click.option(
+    "--max-interactions",
+    type=int,
+    default=0,
+    help="Stop recording after this many interactions (0=unlimited). Default: 0.",
+)
+@click.option(
+    "--session-id",
+    default=None,
+    help="Optional session id for multi-session correlation (see SCALING.md).",
+)
+@click.option(
+    "--endpoint-id",
+    default=None,
+    help="Optional endpoint id for multi-MCP routing (e.g. filesystem, github).",
+)
+@click.option(
+    "--agent-id",
+    default=None,
+    help="Optional agent id for agent-to-agent flows (e.g. search-agent).",
+)
 def record(
     transport: str,
     server_command: str | None,
@@ -97,6 +124,11 @@ def record(
     method_filter: tuple[str, ...],
     tags: tuple[str, ...],
     demo: bool,
+    pending_timeout: float,
+    max_interactions: int,
+    session_id: str | None,
+    endpoint_id: str | None,
+    agent_id: str | None,
 ) -> None:
     """Record MCP interactions to a VCR file.
 
@@ -147,6 +179,11 @@ def record(
             metadata_tags=tag_dict,
             filter_methods=set(method_filter) if method_filter else None,
             client_stdin_fd=client_stdin_fd,
+            pending_timeout_seconds=pending_timeout,
+            max_interactions=max_interactions,
+            session_id=session_id,
+            endpoint_id=endpoint_id,
+            agent_id=agent_id,
         )
 
         console.print(f"[bold green]Starting recording[/bold green]")

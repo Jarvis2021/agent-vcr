@@ -152,7 +152,7 @@ class MCPReplayer:
         if not matching_interaction:
             error_msg = f"No recorded interaction matching {method}({params})"
             logger.error(error_msg)
-            return self._error_response(msg_id, error_msg)
+            return self._error_response(msg_id, error_msg, code=-32601)
 
         # Extract response from interaction
         if not matching_interaction.response:

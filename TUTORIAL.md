@@ -806,7 +806,7 @@ brew install asciinema        # macOS
 
 ### Step 12.2 — Option A: Upload the pre-built recording
 
-We've included a handcrafted `.cast` file:
+We've included a handcrafted `.cast` file in the repo:
 
 ```bash
 asciinema upload demo/agent-vcr-demo.cast
@@ -864,6 +864,8 @@ Replace `DEMO_ID` in `README.md` with the ID from the asciinema URL:
 | `demo/servers/calculator_v2.py` | Demo MCP server v2 (adds divide, metadata) |
 | `demo/record-demo.sh` | Script for recording the asciinema demo |
 | `demo/agent-vcr-demo.cast` | Pre-built asciinema recording |
+| `demo/README-GIFS.md` | How to create GIFs for all 12 labs (asciinema + agg) |
+| `demo/make-lab-gifs.sh` | Run per-lab commands for asciinema → GIF (usage: `bash demo/make-lab-gifs.sh <1-12>`) |
 | `examples/recordings/calculator-v1.vcr` | Sample cassette — v1 session |
 | `examples/recordings/calculator-v2.vcr` | Sample cassette — v2 session |
 | `examples/recordings/calculator-errors.vcr` | Sample cassette — error scenarios |

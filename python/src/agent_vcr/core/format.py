@@ -8,6 +8,7 @@ The .vcr format captures complete MCP sessions including:
 """
 
 import json
+import os
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional, Union
 
@@ -103,6 +104,16 @@ class VCRMetadata(BaseModel):
     tags: Dict[str, str] = Field(
         default_factory=dict, description="Arbitrary tags for organization"
     )
+    # Optional correlation IDs for multi-session / multi-MCP / agent-to-agent (see SCALING.md)
+    session_id: Optional[str] = Field(
+        None, description="Unique id for this session (e.g. UUID); used when grouping multiple recordings"
+    )
+    endpoint_id: Optional[str] = Field(
+        None, description="Logical endpoint (e.g. filesystem, github); used by replay orchestrator to route"
+    )
+    agent_id: Optional[str] = Field(
+        None, description="Optional identifier for the agent or client (e.g. search-agent, writer-agent)"
+    )
 
 
 class VCRSession(BaseModel):
@@ -142,13 +153,15 @@ class VCRRecording(BaseModel):
             IOError: If the file cannot be written
         """
         try:
-            with open(path, "w", encoding="utf-8") as f:
+            tmp_path = path + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(
                     self.model_dump(mode="json", by_alias=False),
                     f,
                     indent=2,
                     default=str,
                 )
+            os.replace(tmp_path, path)
         except (IOError, OSError) as e:
             raise IOError(f"Failed to save VCR recording to {path}: {e}") from e
 

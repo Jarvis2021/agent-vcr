@@ -87,7 +87,14 @@ export class MCPReplayer {
           `No matching interaction found for request: ${JSON.stringify(request)}`
         );
       }
-      return null;
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: {
+          code: -32601,
+          message: `No matching recorded interaction found for method '${request.method}'`,
+        },
+      };
     }
 
     if (!interaction.response) {
@@ -96,7 +103,14 @@ export class MCPReplayer {
           `Interaction ${interaction.sequence} has no recorded response`
         );
       }
-      return null;
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: {
+          code: -32603,
+          message: `Recorded interaction for '${request.method}' has no response`,
+        },
+      };
     }
 
     // Return the recorded response with the incoming request's ID

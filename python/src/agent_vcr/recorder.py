@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -62,6 +63,9 @@ def _make_empty_recording(recorder: MCPRecorder) -> VCRRecording:
         tags=recorder.metadata_tags,
         server_command=recorder.server_command,
         server_args=recorder.server_args,
+        session_id=recorder._session_id,
+        endpoint_id=recorder._endpoint_id,
+        agent_id=recorder._agent_id,
     )
     init_request = JSONRPCRequest(jsonrpc="2.0", id=0, method="initialize", params={})
     init_response = JSONRPCResponse(jsonrpc="2.0", id=0, result={"capabilities": {}})
@@ -112,6 +116,11 @@ class MCPRecorder:
         filter_methods: Optional[set[str]] = None,
         auto_save_interval: float = 0.0,
         client_stdin_fd: Optional[int] = None,
+        pending_timeout_seconds: float = 60.0,
+        max_interactions: int = 0,
+        session_id: Optional[str] = None,
+        endpoint_id: Optional[str] = None,
+        agent_id: Optional[str] = None,
     ) -> None:
         """Initialize the MCPRecorder.
 
@@ -127,6 +136,11 @@ class MCPRecorder:
             filter_methods: Set of method names to record (None = all)
             auto_save_interval: Seconds between auto-saves (0 = disabled)
             client_stdin_fd: Optional fd to read client input from (stdio only, for --demo).
+            pending_timeout_seconds: Evict pending requests with no response after this many seconds (0 = disable).
+            max_interactions: Stop recording after this many interactions (0 = unlimited).
+            session_id: Optional unique id for this session (multi-session / SCALING.md).
+            endpoint_id: Optional logical endpoint id for routing (multi-MCP / SCALING.md).
+            agent_id: Optional agent/client id (agent-to-agent / SCALING.md).
 
         Raises:
             ValueError: If required parameters for transport type are missing
@@ -150,6 +164,12 @@ class MCPRecorder:
         self.filter_methods = filter_methods
         self.auto_save_interval = auto_save_interval
         self._client_stdin_fd = client_stdin_fd
+        self._pending_timeout_seconds = pending_timeout_seconds
+        self._max_interactions = max_interactions  # 0 = unlimited
+        self._pending_cleanup_task: Optional[asyncio.Task[None]] = None
+        self._session_id = session_id
+        self._endpoint_id = endpoint_id
+        self._agent_id = agent_id
 
         # Transport instance (set up during start)
         self._transport: Optional[StdioTransport | SSETransport] = None
@@ -243,6 +263,12 @@ class MCPRecorder:
             on_server_message=self._on_server_message,
         )
 
+        # Start pending-request cleanup to avoid unbounded memory growth
+        if self._pending_timeout_seconds > 0:
+            self._pending_cleanup_task = asyncio.create_task(
+                self._pending_cleanup_loop()
+            )
+
         logger.info("Recorder started")
 
     async def stop(self, output_path: str | Path) -> VCRRecording:
@@ -263,6 +289,15 @@ class MCPRecorder:
 
         logger.info("Stopping recorder")
 
+        # Cancel pending cleanup task
+        if self._pending_cleanup_task and not self._pending_cleanup_task.done():
+            self._pending_cleanup_task.cancel()
+            try:
+                await self._pending_cleanup_task
+            except asyncio.CancelledError:
+                pass
+        self._pending_cleanup_task = None
+
         # Close transport
         if self._transport:
             await self._transport.stop()
@@ -273,17 +308,18 @@ class MCPRecorder:
         else:
             recording = _make_empty_recording(self)
 
-        # Save to file
+        # Save to file (atomic write: temp then rename)
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        with open(output_path, "w") as f:
+        tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(
                 recording.model_dump(mode="json"),
                 f,
                 indent=2,
                 default=str,
             )
+        os.replace(tmp_path, output_path)
 
         self._is_recording = False
         logger.info(f"Recording saved to {output_path}")
@@ -372,6 +408,9 @@ class MCPRecorder:
                         tags=self.metadata_tags,
                         server_command=self.server_command,
                         server_args=self.server_args,
+                        session_id=self._session_id,
+                        endpoint_id=self._endpoint_id,
+                        agent_id=self._agent_id,
                     )
                     self._session_manager.start_recording(
                         metadata=metadata,
@@ -380,8 +419,18 @@ class MCPRecorder:
                     )
                     logger.info("Session initialized with initialize handshake")
                 else:
-                    # Record regular interaction
-                    self._session_manager.record_interaction(request_obj, response_obj)
+                    # Record regular interaction (respect max_interactions)
+                    if self._max_interactions > 0:
+                        n = len(self._session_manager.current_recording.session.interactions)
+                        if n >= self._max_interactions:
+                            logger.warning(
+                                "Max interactions reached (%s); skipping recording of further interactions",
+                                self._max_interactions,
+                            )
+                        else:
+                            self._session_manager.record_interaction(request_obj, response_obj)
+                    else:
+                        self._session_manager.record_interaction(request_obj, response_obj)
             else:
                 logger.debug(f"Received response for unknown request id={msg_id}")
 
@@ -458,6 +507,33 @@ class MCPRecorder:
             )
 
         return None
+
+    def _evict_stale_pending_requests(self) -> None:
+        """One-pass eviction of pending requests older than pending_timeout_seconds."""
+        now = time.time()
+        threshold = now - self._pending_timeout_seconds
+        evicted = [
+            msg_id
+            for msg_id, t in self._pending_request_times.items()
+            if t < threshold
+        ]
+        for msg_id in evicted:
+            self._pending_requests.pop(msg_id, None)
+            self._pending_request_times.pop(msg_id, None)
+            logger.warning(
+                "Evicted stale pending request id=%s (no response within %.0fs)",
+                msg_id,
+                self._pending_timeout_seconds,
+            )
+
+    async def _pending_cleanup_loop(self) -> None:
+        """Periodically evict pending requests that never received a response."""
+        interval = min(30.0, max(5.0, self._pending_timeout_seconds / 2))
+        while True:
+            await asyncio.sleep(interval)
+            if not self._is_recording:
+                break
+            self._evict_stale_pending_requests()
 
     def _auto_save(self) -> None:
         """Auto-save current recording state.
