@@ -3,22 +3,37 @@
 Learn Agent VCR by doing. This tutorial walks you through every use case with real commands you can run on your machine.
 
 **Time:** ~30 minutes
-**Prerequisites:** Python 3.10+, pip
+**Prerequisites:** Python 3.10+, [uv](https://docs.astral.sh/uv/) (recommended) or pip
 
 ---
 
 ## Setup
 
-Before starting, install Agent VCR and verify it works.
+Before starting, install `uv` (if you haven't already) and set up the project.
+
+### Install uv
+
+```bash
+# macOS / Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# or with Homebrew
+brew install uv
+```
+
+### Clone and install Agent VCR
 
 ```bash
 # Clone the repo (skip if you already have it)
 git clone https://github.com/jarvis2021/agent-vcr.git
-cd agent-vcr
+cd agent-vcr/python
 
-# Install in development mode
-cd python
-pip install -e ".[dev]"
+# Create a virtual environment and install with all dev dependencies
+uv venv
+source .venv/bin/activate    # macOS/Linux
+uv pip install -e ".[dev]"
+
+# Go back to repo root
 cd ..
 
 # Verify installation
@@ -26,6 +41,20 @@ agent-vcr --help
 ```
 
 You should see the CLI help showing `record`, `replay`, `diff`, and `inspect` commands.
+
+<details>
+<summary>Alternative: using pip (not recommended)</summary>
+
+```bash
+cd agent-vcr/python
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+cd ..
+agent-vcr --help
+```
+
+</details>
 
 **Test the demo servers** (these are included in the repo):
 

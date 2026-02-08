@@ -5,11 +5,19 @@ Thanks for your interest in contributing. Agent VCR is an open-source project an
 ## Getting Started
 
 ```bash
-git clone https://github.com/pvoola/agent-vcr.git
+git clone https://github.com/jarvis2021/agent-vcr.git
 cd agent-vcr/python
-pip install -e ".[dev]"
+
+# Setup with uv (recommended — fast, handles venvs automatically)
+uv venv
+source .venv/bin/activate
+uv pip install -e ".[dev]"
+
+# Run tests
 pytest tests/ -v
 ```
+
+> **Why uv?** It's 10-100x faster than pip, creates isolated environments by default, and is the standard Python package manager in 2026. Install it with `curl -LsSf https://astral.sh/uv/install.sh | sh` or `brew install uv`.
 
 ## What We Need Help With
 

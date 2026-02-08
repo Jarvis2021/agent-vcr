@@ -110,6 +110,10 @@ print(f"Breaking changes: {len(result.breaking_changes)}")
 > **New to Agent VCR?** Follow the [hands-on tutorial](TUTORIAL.md) — 12 labs covering every use case with real commands.
 
 ```bash
+# Recommended
+uv pip install agent-vcr
+
+# Or with pip
 pip install agent-vcr
 ```
 
@@ -372,7 +376,11 @@ agent_vcr/
 # Clone and install
 git clone https://github.com/jarvis2021/agent-vcr.git
 cd agent-vcr/python
-pip install -e ".[dev]"
+
+# Setup with uv (recommended)
+uv venv
+source .venv/bin/activate
+uv pip install -e ".[dev]"
 
 # Run tests
 pytest tests/ -v
