@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shlex
 import sys
 from pathlib import Path
 from typing import Any
@@ -103,11 +104,21 @@ def record(
             key, value = tag.split("=", 1)
             tag_dict[key] = value
 
+        # Parse server command — split "python demo/server.py" into
+        # command="python" and args=["demo/server.py"] so that
+        # asyncio.create_subprocess_exec receives them as separate arguments.
+        parsed_command = server_command
+        parsed_args = list(server_args)
+        if server_command:
+            parts = shlex.split(server_command)
+            parsed_command = parts[0]
+            parsed_args = parts[1:] + parsed_args
+
         # Create recorder
         recorder = MCPRecorder(
             transport=transport,
-            server_command=server_command,
-            server_args=list(server_args),
+            server_command=parsed_command,
+            server_args=parsed_args,
             server_url=server_url,
             metadata_tags=tag_dict,
             filter_methods=set(method_filter) if method_filter else None,
