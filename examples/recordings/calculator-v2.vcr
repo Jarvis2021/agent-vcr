@@ -1,0 +1,211 @@
+{
+  "format_version": "1.0.0",
+  "metadata": {
+    "version": "1.0.0",
+    "recorded_at": "2026-02-08T14:15:00",
+    "transport": "stdio",
+    "client_info": {
+      "name": "claude-desktop",
+      "version": "1.4.0"
+    },
+    "server_info": {
+      "name": "calculator-server",
+      "version": "2.0.0"
+    },
+    "server_command": "node calculator-server.js",
+    "server_args": ["--v2"],
+    "tags": {
+      "env": "staging",
+      "purpose": "compatibility-check"
+    }
+  },
+  "session": {
+    "initialize_request": {
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "initialize",
+      "params": {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {},
+        "clientInfo": {
+          "name": "claude-desktop",
+          "version": "1.4.0"
+        }
+      }
+    },
+    "initialize_response": {
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {
+          "tools": {},
+          "resources": {}
+        },
+        "serverInfo": {
+          "name": "calculator-server",
+          "version": "2.0.0"
+        }
+      }
+    },
+    "capabilities": {
+      "tools": {},
+      "resources": {}
+    },
+    "interactions": [
+      {
+        "sequence": 0,
+        "timestamp": "2026-02-08T14:15:01.000",
+        "direction": "client_to_server",
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/list",
+          "params": {}
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": {
+            "tools": [
+              {
+                "name": "add",
+                "description": "Add two numbers together",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "a": { "type": "number", "description": "First number" },
+                    "b": { "type": "number", "description": "Second number" }
+                  },
+                  "required": ["a", "b"]
+                }
+              },
+              {
+                "name": "multiply",
+                "description": "Multiply two numbers",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "a": { "type": "number", "description": "First factor" },
+                    "b": { "type": "number", "description": "Second factor" }
+                  },
+                  "required": ["a", "b"]
+                }
+              },
+              {
+                "name": "divide",
+                "description": "Divide first number by second",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "a": { "type": "number", "description": "Dividend" },
+                    "b": { "type": "number", "description": "Divisor (non-zero)" }
+                  },
+                  "required": ["a", "b"]
+                }
+              }
+            ]
+          }
+        },
+        "notifications": [],
+        "latency_ms": 31.0
+      },
+      {
+        "sequence": 1,
+        "timestamp": "2026-02-08T14:15:01.050",
+        "direction": "client_to_server",
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/call",
+          "params": {
+            "name": "add",
+            "arguments": { "a": 15, "b": 27 }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "42"
+              }
+            ],
+            "metadata": {
+              "computation_time_ms": 0.3,
+              "precision": "float64"
+            }
+          }
+        },
+        "notifications": [],
+        "latency_ms": 11.2
+      },
+      {
+        "sequence": 2,
+        "timestamp": "2026-02-08T14:15:01.120",
+        "direction": "client_to_server",
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "method": "tools/call",
+          "params": {
+            "name": "multiply",
+            "arguments": { "a": 6, "b": 7 }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "42"
+              }
+            ],
+            "metadata": {
+              "computation_time_ms": 0.1,
+              "precision": "float64"
+            }
+          }
+        },
+        "notifications": [],
+        "latency_ms": 5.8
+      },
+      {
+        "sequence": 3,
+        "timestamp": "2026-02-08T14:15:01.200",
+        "direction": "client_to_server",
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "method": "tools/call",
+          "params": {
+            "name": "divide",
+            "arguments": { "a": 100, "b": 3 }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "33.333333333333336"
+              }
+            ],
+            "metadata": {
+              "computation_time_ms": 0.2,
+              "precision": "float64"
+            }
+          }
+        },
+        "notifications": [],
+        "latency_ms": 7.4
+      }
+    ]
+  }
+}

@@ -5,6 +5,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
+<!-- Replace DEMO_ID with your asciinema recording ID after uploading -->
+[![Agent VCR Demo](https://asciinema.org/a/DEMO_ID.svg)](https://asciinema.org/a/DEMO_ID)
+
 Agent VCR is a testing framework for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io). It transparently records all JSON-RPC 2.0 interactions between an MCP client and server, then replays them deterministically for testing — no real server needed.
 
 ## The Problem
@@ -141,6 +144,29 @@ agent-vcr diff baseline.vcr current.vcr --format json --fail-on-breaking
 agent-vcr inspect session.vcr
 agent-vcr inspect session.vcr --format table
 ```
+
+## Try It Now
+
+The repo ships with sample `.vcr` cassettes so you can try the CLI immediately:
+
+```bash
+# Inspect a recording
+agent-vcr inspect examples/recordings/calculator-v1.vcr
+
+# Diff two server versions — spot the new tool and schema changes
+agent-vcr diff examples/recordings/calculator-v1.vcr examples/recordings/calculator-v2.vcr
+
+# See error handling in action
+agent-vcr inspect examples/recordings/calculator-errors.vcr
+```
+
+Sample cassettes included:
+
+| File | Description | Interactions |
+|------|-------------|:------------:|
+| `calculator-v1.vcr` | Calculator MCP server v1 — add, multiply | 3 |
+| `calculator-v2.vcr` | Calculator v2 — adds divide tool + response metadata | 4 |
+| `calculator-errors.vcr` | Error scenarios — division by zero, method not found | 4 |
 
 ## Programmatic Usage
 

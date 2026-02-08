@@ -1,0 +1,185 @@
+{
+  "format_version": "1.0.0",
+  "metadata": {
+    "version": "1.0.0",
+    "recorded_at": "2026-02-08T16:00:00",
+    "transport": "stdio",
+    "client_info": {
+      "name": "claude-desktop",
+      "version": "1.4.0"
+    },
+    "server_info": {
+      "name": "calculator-server",
+      "version": "2.0.0"
+    },
+    "server_command": "node calculator-server.js",
+    "server_args": ["--v2"],
+    "tags": {
+      "env": "development",
+      "purpose": "error-injection-testing"
+    }
+  },
+  "session": {
+    "initialize_request": {
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "initialize",
+      "params": {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {},
+        "clientInfo": {
+          "name": "claude-desktop",
+          "version": "1.4.0"
+        }
+      }
+    },
+    "initialize_response": {
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {
+          "tools": {}
+        },
+        "serverInfo": {
+          "name": "calculator-server",
+          "version": "2.0.0"
+        }
+      }
+    },
+    "capabilities": {
+      "tools": {}
+    },
+    "interactions": [
+      {
+        "sequence": 0,
+        "timestamp": "2026-02-08T16:00:01.000",
+        "direction": "client_to_server",
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/list",
+          "params": {}
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": {
+            "tools": [
+              {
+                "name": "add",
+                "description": "Add two numbers together",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "a": { "type": "number" },
+                    "b": { "type": "number" }
+                  },
+                  "required": ["a", "b"]
+                }
+              },
+              {
+                "name": "divide",
+                "description": "Divide first number by second",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "a": { "type": "number" },
+                    "b": { "type": "number" }
+                  },
+                  "required": ["a", "b"]
+                }
+              }
+            ]
+          }
+        },
+        "notifications": [],
+        "latency_ms": 28.1
+      },
+      {
+        "sequence": 1,
+        "timestamp": "2026-02-08T16:00:01.050",
+        "direction": "client_to_server",
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "method": "tools/call",
+          "params": {
+            "name": "divide",
+            "arguments": { "a": 10, "b": 0 }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 2,
+          "error": {
+            "code": -32603,
+            "message": "Division by zero",
+            "data": {
+              "details": "Cannot divide 10 by 0",
+              "tool": "divide",
+              "input": { "a": 10, "b": 0 }
+            }
+          }
+        },
+        "notifications": [],
+        "latency_ms": 4.3
+      },
+      {
+        "sequence": 2,
+        "timestamp": "2026-02-08T16:00:01.100",
+        "direction": "client_to_server",
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "method": "tools/call",
+          "params": {
+            "name": "nonexistent_tool",
+            "arguments": {}
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 3,
+          "error": {
+            "code": -32601,
+            "message": "Method not found",
+            "data": {
+              "details": "Tool 'nonexistent_tool' is not registered"
+            }
+          }
+        },
+        "notifications": [],
+        "latency_ms": 2.1
+      },
+      {
+        "sequence": 3,
+        "timestamp": "2026-02-08T16:00:01.150",
+        "direction": "client_to_server",
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "method": "tools/call",
+          "params": {
+            "name": "add",
+            "arguments": { "a": 100, "b": 200 }
+          }
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 4,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "300"
+              }
+            ]
+          }
+        },
+        "notifications": [],
+        "latency_ms": 5.9
+      }
+    ]
+  }
+}
