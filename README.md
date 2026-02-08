@@ -345,7 +345,7 @@ Recordings use a JSON-based `.vcr` format:
 
 ## Architecture
 
-See [ARCHITECTURE.md](../ARCHITECTURE.md) for the full system design, data flow diagrams, and design decisions.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design, data flow diagrams, and design decisions.
 
 ```
 agent_vcr/
@@ -368,7 +368,7 @@ agent_vcr/
 
 ```bash
 # Clone and install
-git clone https://github.com/pvoola/agent-vcr.git
+git clone https://github.com/jarvis2021/agent-vcr.git
 cd agent-vcr/python
 pip install -e ".[dev]"
 
@@ -387,8 +387,8 @@ mypy src/
 
 ## Contributing
 
-Contributions are welcome! Please see the [ARCHITECTURE.md](../ARCHITECTURE.md) for system design context and the [CLAUDE.md](../CLAUDE.md) for coding conventions.
+Contributions are welcome! Please see [ARCHITECTURE.md](ARCHITECTURE.md) for system design context and [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-[MIT](../LICENSE)
+[MIT](LICENSE)
