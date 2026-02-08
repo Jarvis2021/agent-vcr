@@ -6,7 +6,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
 <!-- Replace DEMO_ID with your asciinema recording ID after uploading -->
-[![Agent VCR Demo](https://asciinema.org/a/DEMO_ID.svg)](https://asciinema.org/a/DEMO_ID)
+![Agent VCR Demo](assets/demo.gif)
 
 Agent VCR is a testing framework for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io). It transparently records all JSON-RPC 2.0 interactions between an MCP client and server, then replays them deterministically for testing — no real server needed.
 
@@ -46,8 +46,8 @@ Client ←→ Agent VCR ←→ Real Server    Client ←→ Agent VCR (mock)
 Record a "known good" session, commit the `.vcr` file to your repo, and replay it in CI. If your code changes break the interaction pattern, the test fails immediately.
 
 ```bash
-# Record the golden cassette (once)
-agent-vcr record --transport stdio --server-command "node my-server.js" -o cassettes/golden.vcr
+# Record the golden cassette (once, using the included demo server)
+agent-vcr record --transport stdio --server-command "python demo/servers/calculator_v1.py" -o cassettes/golden.vcr
 
 # Every CI run replays it
 pytest tests/ --vcr-dir=cassettes
@@ -57,8 +57,8 @@ pytest tests/ --vcr-dir=cassettes
 Before deploying a new server version, record both old and new, then diff:
 
 ```bash
-agent-vcr record --transport stdio --server-command "./server-v1" -o v1.vcr
-agent-vcr record --transport stdio --server-command "./server-v2" -o v2.vcr
+agent-vcr record --transport stdio --server-command "python demo/servers/calculator_v1.py" -o v1.vcr
+agent-vcr record --transport stdio --server-command "python demo/servers/calculator_v2.py" -o v2.vcr
 agent-vcr diff v1.vcr v2.vcr --fail-on-breaking
 ```
 
@@ -120,10 +120,10 @@ pip install agent-vcr
 ### Record a session
 
 ```bash
-# Record stdio-based MCP server
-agent-vcr record --transport stdio --server-command "node my-server.js" -o session.vcr
+# Record stdio-based MCP server (try it now with the included demo server)
+agent-vcr record --transport stdio --server-command "python demo/servers/calculator_v1.py" -o session.vcr
 
-# Record SSE-based MCP server
+# Record SSE-based MCP server (replace URL with your server)
 agent-vcr record --transport sse --server-url http://localhost:3000/sse -o session.vcr
 ```
 

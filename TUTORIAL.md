@@ -551,7 +551,7 @@ Each team adds their own compatibility check to their CI:
 
 **Goal:** Track how your server's behavior changes as the MCP spec evolves.
 
-### Step 8.1 — Create a tracking script
+### Step 9.1 — Create a tracking script
 
 Create a file `track_evolution.py`:
 
@@ -591,23 +591,23 @@ if __name__ == "__main__":
     track()
 ```
 
-### Step 8.2 — Run it
+### Step 9.2 — Run it
 
 ```bash
 python track_evolution.py
 ```
 
-### Step 8.3 — Build a version history
+### Step 9.3 — Build a version history
 
 Over time, you record each server version:
 
 ```bash
-agent-vcr record --transport stdio --server-command "./server-v1" -o versions/v1.0.vcr
-agent-vcr record --transport stdio --server-command "./server-v2" -o versions/v2.0.vcr
-agent-vcr record --transport stdio --server-command "./server-v3" -o versions/v3.0.vcr
+agent-vcr record --transport stdio --server-command "python demo/servers/calculator_v1.py" -o versions/v1.0.vcr
+agent-vcr record --transport stdio --server-command "python demo/servers/calculator_v2.py" -o versions/v2.0.vcr
+# (add more versions as your server evolves)
 
 # Compare any two
-agent-vcr diff versions/v1.0.vcr versions/v3.0.vcr
+agent-vcr diff versions/v1.0.vcr versions/v2.0.vcr
 ```
 
 **What you learned:** By recording each server version, you build a version history you can diff at any point to understand exactly what changed.
@@ -618,7 +618,7 @@ agent-vcr diff versions/v1.0.vcr versions/v3.0.vcr
 
 **Goal:** Build recordings from code — useful for testing without a real server at all.
 
-### Step 9.1 — Run the included example
+### Step 10.1 — Run the included example
 
 ```bash
 cd python
@@ -632,14 +632,14 @@ Or run the example script directly:
 python examples/python/create_sample_recording.py programmatic-sample.vcr
 ```
 
-### Step 9.2 — Inspect and replay it
+### Step 10.2 — Inspect and replay it
 
 ```bash
 agent-vcr inspect programmatic-sample.vcr
 agent-vcr replay --file programmatic-sample.vcr --transport stdio
 ```
 
-### Step 9.3 — Build your own recording
+### Step 10.3 — Build your own recording
 
 ```python
 from datetime import datetime
@@ -696,7 +696,7 @@ print("Saved my-custom.vcr!")
 
 **Goal:** Use Agent VCR fixtures and markers in your test suite.
 
-### Step 10.1 — The `@pytest.mark.vcr` marker
+### Step 11.1 — The `@pytest.mark.vcr` marker
 
 ```python
 # tests/test_with_marker.py
@@ -715,7 +715,7 @@ def test_tools_list(vcr_replayer):
     assert len(tools) == 2
 ```
 
-### Step 10.2 — The async context manager
+### Step 11.2 — The async context manager
 
 ```python
 # tests/test_async.py
@@ -733,7 +733,7 @@ async def test_with_cassette():
         assert response["result"]["content"][0]["text"] == "42"
 ```
 
-### Step 10.3 — Recording in test mode
+### Step 11.3 — Recording in test mode
 
 ```bash
 # Run tests in record mode (creates cassettes from live server)
@@ -745,7 +745,7 @@ pytest tests/ --vcr-dir=my_cassettes
 cd ..
 ```
 
-### Step 10.4 — Match strategies
+### Step 11.4 — Match strategies
 
 Try different matching strategies to see how they affect replay:
 
@@ -779,14 +779,14 @@ exact = MCPReplayer(recording, match_strategy="exact")
 
 **Goal:** Create a terminal recording you can embed in the README.
 
-### Step 11.1 — Install asciinema
+### Step 12.1 — Install asciinema
 
 ```bash
 brew install asciinema        # macOS
 # pip install asciinema       # or via pip
 ```
 
-### Step 11.2 — Option A: Upload the pre-built recording
+### Step 12.2 — Option A: Upload the pre-built recording
 
 We've included a handcrafted `.cast` file:
 
@@ -796,7 +796,7 @@ asciinema upload demo/agent-vcr-demo.cast
 
 It prints a URL — that's your embed link.
 
-### Step 11.3 — Option B: Record a live session
+### Step 12.3 — Option B: Record a live session
 
 ```bash
 asciinema rec demo/my-live-demo.cast -c "bash demo/record-demo.sh"
@@ -814,7 +814,7 @@ Then upload:
 asciinema upload demo/my-live-demo.cast
 ```
 
-### Step 11.4 — Update the README
+### Step 12.4 — Update the README
 
 Replace `DEMO_ID` in `README.md` with the ID from the asciinema URL:
 

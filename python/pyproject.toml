@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "agent-vcr"
 version = "0.1.0"
 description = "Record, replay, and diff MCP (Model Context Protocol) interactions — like VCR for AI agents"
-readme = "README.md"
+readme = "../README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [
