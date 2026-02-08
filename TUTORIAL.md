@@ -82,12 +82,19 @@ Press `Ctrl+C` to stop. Your recording is saved to `my-first-recording.vcr`.
 ### Step 1.4 — Inspect your recording
 
 ```bash
+# Default view
 agent-vcr inspect my-first-recording.vcr
+
+# Table format — nice columns for method, params, status, latency
+agent-vcr inspect my-first-recording.vcr --format table
+
+# JSON format — raw data, useful for piping to jq
+agent-vcr inspect my-first-recording.vcr --format json
 ```
 
-You should see a table showing all 4 interactions with methods, params, status, and latency.
+Try all three formats. The default and table views are human-friendly; JSON is useful for scripting (`agent-vcr inspect file.vcr --format json | jq '.interactions[].method'`).
 
-**What you learned:** Agent VCR transparently proxies MCP traffic and saves it as a replayable cassette file.
+**What you learned:** Agent VCR transparently proxies MCP traffic and saves it as a replayable cassette file. Inspect it in multiple formats.
 
 ---
 
@@ -435,7 +442,83 @@ Now point your client to `http://localhost:3100/sse` and it works offline.
 
 ---
 
-## Lab 8: Protocol Evolution Tracking (Use Case #6)
+## Lab 8: Multi-Agent Regression Testing (Use Case #5)
+
+**Goal:** When multiple AI agents share MCP infrastructure, one team's server change can break another team's agent. Each team maintains their own cassettes and runs compatibility checks independently.
+
+### Step 8.1 — Set up per-team cassette directories
+
+Imagine two teams: **Team Search** (builds a search agent) and **Team Writer** (builds a writing agent). Both use the same calculator MCP server.
+
+```bash
+mkdir -p cassettes/team-search
+mkdir -p cassettes/team-writer
+```
+
+### Step 8.2 — Each team records their own golden cassettes
+
+**Team Search** records what they care about (tools/list + add):
+
+```bash
+agent-vcr record \
+  --transport stdio \
+  --server-command "python demo/servers/calculator_v1.py" \
+  -o cassettes/team-search/baseline.vcr
+# Send: initialize, tools/list, tools/call(add), then Ctrl+C
+```
+
+**Team Writer** records their usage (tools/list + multiply):
+
+```bash
+agent-vcr record \
+  --transport stdio \
+  --server-command "python demo/servers/calculator_v1.py" \
+  -o cassettes/team-writer/baseline.vcr
+# Send: initialize, tools/list, tools/call(multiply), then Ctrl+C
+```
+
+### Step 8.3 — Server team releases v2
+
+The server team records against v2:
+
+```bash
+agent-vcr record \
+  --transport stdio \
+  --server-command "python demo/servers/calculator_v2.py" \
+  -o cassettes/server-v2-candidate.vcr
+# Send all known operations, then Ctrl+C
+```
+
+### Step 8.4 — Each team independently checks compatibility
+
+```bash
+# Team Search checks: will v2 break our agent?
+agent-vcr diff cassettes/team-search/baseline.vcr cassettes/server-v2-candidate.vcr --fail-on-breaking
+echo "Team Search: exit code $?"
+
+# Team Writer checks: will v2 break our agent?
+agent-vcr diff cassettes/team-writer/baseline.vcr cassettes/server-v2-candidate.vcr --fail-on-breaking
+echo "Team Writer: exit code $?"
+```
+
+Both should pass (v2 only adds features). But if v2 had *removed* the multiply tool, Team Writer's check would fail while Team Search's would pass — catching the issue before deploy.
+
+### Step 8.5 — Automate with CI
+
+Each team adds their own compatibility check to their CI:
+
+```yaml
+# team-search/.github/workflows/mcp-compat.yml
+- name: Check MCP server compatibility
+  run: agent-vcr diff cassettes/team-search/baseline.vcr cassettes/latest-server.vcr --fail-on-breaking
+```
+
+**What you learned:** Each team maintains their own cassettes reflecting their agent's actual usage. When the shared server changes, every team independently verifies compatibility — no coordination needed.
+
+---
+
+## Lab 9: Protocol Evolution Tracking (Use Case #6)
+
 
 **Goal:** Track how your server's behavior changes as the MCP spec evolves.
 
@@ -502,7 +585,7 @@ agent-vcr diff versions/v1.0.vcr versions/v3.0.vcr
 
 ---
 
-## Lab 9: Programmatic Recording (No Live Server)
+## Lab 10: Programmatic Recording (No Live Server)
 
 **Goal:** Build recordings from code — useful for testing without a real server at all.
 
@@ -580,7 +663,7 @@ print("Saved my-custom.vcr!")
 
 ---
 
-## Lab 10: Pytest Integration
+## Lab 11: Pytest Integration
 
 **Goal:** Use Agent VCR fixtures and markers in your test suite.
 
@@ -663,7 +746,7 @@ exact = MCPReplayer(recording, match_strategy="exact")
 
 ---
 
-## Lab 11: Recording the Demo with asciinema
+## Lab 12: Recording the Demo with asciinema
 
 **Goal:** Create a terminal recording you can embed in the README.
 

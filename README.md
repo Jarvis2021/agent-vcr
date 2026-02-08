@@ -107,7 +107,7 @@ print(f"Breaking changes: {len(result.breaking_changes)}")
 
 ## Quick Start
 
-> **New to Agent VCR?** Follow the [hands-on tutorial](TUTORIAL.md) — 11 labs covering every use case with real commands.
+> **New to Agent VCR?** Follow the [hands-on tutorial](TUTORIAL.md) — 12 labs covering every use case with real commands.
 
 ```bash
 pip install agent-vcr
