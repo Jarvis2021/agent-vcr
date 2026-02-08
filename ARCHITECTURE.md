@@ -6,54 +6,13 @@ This document covers the system design, data flow, design decisions, known limit
 
 ## System Overview
 
-```
-                    ┌─────────────────────────────────────┐
-                    │           Agent VCR Proxy            │
-                    │                                      │
- ┌──────────┐      │  ┌───────────┐    ┌──────────────┐  │      ┌──────────┐
- │          │ JSON  │  │           │    │              │  │ JSON │          │
- │   MCP    │─RPC──▶│  │ Transport │───▶│  MCPRecorder │  │──RPC▶│   MCP    │
- │  Client  │◀──────│  │  (stdio   │◀───│  (captures   │  │◀─────│  Server  │
- │          │       │  │   / SSE)  │    │   to .vcr)   │  │      │          │
- └──────────┘      │  └───────────┘    └──────┬───────┘  │      └──────────┘
-                    │                          │           │
-                    └──────────────────────────┼───────────┘
-                                               │
-                                               ▼
-                                        ┌─────────────┐
-                                        │  .vcr file   │
-                                        │  (JSON)      │
-                                        └──────┬──────┘
-                                               │
-                          ┌────────────────────┼────────────────────┐
-                          │                    │                    │
-                          ▼                    ▼                    ▼
-                   ┌─────────────┐    ┌──────────────┐    ┌──────────────┐
-                   │ MCPReplayer │    │   MCPDiff     │    │  CLI inspect │
-                   │ (mock       │    │ (regression   │    │  (human-     │
-                   │  server)    │    │  detection)   │    │   readable)  │
-                   └─────────────┘    └──────────────┘    └──────────────┘
-```
+![System Flow](assets/SystemOverview.jpg)
 
 ## Layer Architecture
 
 The codebase is organized into four layers, each with a clear responsibility:
 
-```
-┌──────────────────────────────────────────────────────┐
-│  Integration Layer                                    │
-│  cli.py  ·  pytest_plugin.py                         │
-├──────────────────────────────────────────────────────┤
-│  Engine Layer                                         │
-│  recorder.py  ·  replayer.py  ·  diff.py             │
-├──────────────────────────────────────────────────────┤
-│  Core Layer                                           │
-│  core/format.py  ·  core/session.py  ·  core/matcher │
-├──────────────────────────────────────────────────────┤
-│  Transport Layer                                      │
-│  transport/base.py  ·  transport/stdio.py  ·  sse.py │
-└──────────────────────────────────────────────────────┘
-```
+![Layer Architecture](assets/LayerArchitecture.jpg)
 
 **Transport Layer** handles the raw communication protocol. `BaseTransport` defines the abstract interface; `StdioTransport` spawns a subprocess and proxies stdin/stdout; `SSETransport` runs an HTTP server and proxies Server-Sent Events. Each transport accepts message callbacks and forwards JSON-RPC messages bidirectionally.
 
