@@ -19,12 +19,22 @@ class RequestMatcher:
     - sequential: Return interactions in order regardless of match
     """
 
+    VALID_STRATEGIES = {"exact", "method", "method_and_params", "fuzzy", "sequential"}
+
     def __init__(self, strategy: MatchStrategy = "method_and_params") -> None:
         """Initialize the request matcher.
 
         Args:
             strategy: Matching strategy to use
+
+        Raises:
+            ValueError: If strategy is not a valid matching strategy
         """
+        if strategy not in self.VALID_STRATEGIES:
+            raise ValueError(
+                f"Unknown matching strategy: '{strategy}'. "
+                f"Valid strategies: {', '.join(sorted(self.VALID_STRATEGIES))}"
+            )
         self.strategy = strategy
         self._sequential_index = 0
 
@@ -105,10 +115,10 @@ class RequestMatcher:
             List of interactions whose requests exactly match
         """
         matches = []
-        request_dict = request.model_dump(exclude={"jsonrpc"})
+        request_dict = request.model_dump(exclude={"jsonrpc", "id"})
 
         for interaction in interactions:
-            recorded_dict = interaction.request.model_dump(exclude={"jsonrpc"})
+            recorded_dict = interaction.request.model_dump(exclude={"jsonrpc", "id"})
             if request_dict == recorded_dict:
                 matches.append(interaction)
 

@@ -2,7 +2,7 @@
 
 Agent VCR is a testing framework for the Model Context Protocol (MCP). It transparently records JSON-RPC 2.0 interactions between MCP clients and servers, then replays them deterministically for testing.
 
-**Available in Python and TypeScript/Node.js** — This document describes the architecture that both implementations follow. While examples use Python, the TypeScript implementation mirrors the same design patterns.
+This document describes the architecture of the Python implementation. The TypeScript source code mirrors the same structure but is not yet tested.
 
 This document covers the system design, data flow, design decisions, known limitations, and future direction.
 
@@ -126,7 +126,7 @@ The replayer supports five strategies for matching incoming requests to recorded
 
 | Strategy | How It Matches | Best For |
 |----------|----------------|----------|
-| `exact` | Full JSON equality of request (excluding `jsonrpc` field) | Strictest regression tests |
+| `exact` | Full JSON equality of request (excluding `jsonrpc` and `id` fields) | Strictest regression tests |
 | `method` | Method name only | Broad acceptance tests |
 | `method_and_params` | Method name + full params equality | Standard testing (default) |
 | `fuzzy` | Method name + params subset (dict keys in request must exist in recorded) | Flexible/partial matching |

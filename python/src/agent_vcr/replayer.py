@@ -171,7 +171,7 @@ class MCPReplayer:
         if response_obj.result is not None:
             response["result"] = response_obj.result
         elif response_obj.error is not None:
-            response["error"] = response_obj.error
+            response["error"] = response_obj.error.model_dump(exclude_none=True)
 
         logger.debug(f"Returning recorded response for id={msg_id}")
         return response

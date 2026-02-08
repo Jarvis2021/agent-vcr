@@ -370,7 +370,9 @@ class MCPDiff:
                             modified.append(diff)
                             if not diff.is_compatible:
                                 breaking_changes.append(
-                                    f"Breaking change in {method}: {diff}"
+                                    f"Breaking change in {method}: "
+                                    f"request_changed={diff.request_diff is not None}, "
+                                    f"response_changed={diff.response_diff is not None}"
                                 )
                     else:
                         added.append(current_interaction)

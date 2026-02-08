@@ -1,5 +1,7 @@
 # Publishing Guide
 
+> **Current status:** Python is ready to publish to PyPI. TypeScript publishing is **blocked** until tests are written and verified. Do not publish the TypeScript package without a passing test suite.
+
 This guide covers how to publish Agent VCR to PyPI (Python) and npm (TypeScript).
 
 ## Publishing Strategy

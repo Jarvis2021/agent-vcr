@@ -49,10 +49,10 @@ export class ExactMatcher extends RequestMatcher {
   }
 
   private isExactMatch(a: JSONRPCRequest, b: JSONRPCRequest): boolean {
+    // Exclude id (and jsonrpc) so replay request id can differ from recorded
     return (
-      a.id === b.id &&
       a.method === b.method &&
-      JSON.stringify(a.params) === JSON.stringify(b.params)
+      JSON.stringify(a.params ?? null) === JSON.stringify(b.params ?? null)
     );
   }
 }

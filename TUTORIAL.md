@@ -42,6 +42,8 @@ agent-vcr --help
 
 You should see the CLI help showing `record`, `replay`, `diff`, and `inspect` commands.
 
+**TypeScript:** This tutorial uses the Python CLI and pytest. For the TypeScript/Node.js implementation, see [typescript/README.md](typescript/README.md). To run TypeScript tests: `cd typescript && npm install && npm run build && npm test`.
+
 <details>
 <summary>Alternative: using pip (not recommended)</summary>
 
@@ -71,6 +73,22 @@ You should see a JSON response with `serverInfo.name: "calculator-server"` and `
 
 **Goal:** Record a live MCP session and save it as a `.vcr` cassette.
 
+**Easiest option — automatic (no pasting):** From the repo root, run with `--demo`. The same requests are sent for you and the recording is saved. No copy-paste.
+
+```bash
+agent-vcr record \
+  --transport stdio \
+  --server-command "python demo/servers/calculator_v1.py" \
+  -o my-first-recording.vcr \
+  --demo
+```
+
+You should see four JSON response lines in the terminal, then "Demo recording saved." Skip to Step 1.4 to inspect.
+
+---
+
+**Manual option — interactive:** If you don’t use `--demo`, you must send the requests yourself (see below).
+
 ### Step 1.1 — Record the session
 
 ```bash
@@ -80,11 +98,11 @@ agent-vcr record \
   -o my-first-recording.vcr
 ```
 
-This starts the calculator server and opens an interactive proxy. Agent VCR sits between you (the client) and the server, recording everything.
+This starts the calculator server and opens an interactive proxy. Agent VCR sits between you (the client) and the server, recording everything. The process will wait for you to type or paste requests.
 
 ### Step 1.2 — Send requests through the proxy
 
-With the proxy running, type these JSON-RPC requests (one per line):
+**You must paste (or type) the following lines** into the same terminal. After each line you send, **one line of JSON will appear** — that’s the server’s response. Paste these one at a time (or paste the block and send line by line):
 
 ```json
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"tutorial","version":"1.0.0"}}}
@@ -102,7 +120,7 @@ With the proxy running, type these JSON-RPC requests (one per line):
 {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"multiply","arguments":{"a":6,"b":7}}}
 ```
 
-Each request gets a response from the real server, and Agent VCR records both.
+Each request gets one JSON response line in the terminal from the real server; Agent VCR records both. If you don’t see any response after pasting, make sure you pressed Enter and that you’re in the same terminal where recording is running.
 
 ### Step 1.3 — Stop recording
 
@@ -849,6 +867,13 @@ Replace `DEMO_ID` in `README.md` with the ID from the asciinema URL:
 | `examples/recordings/calculator-v1.vcr` | Sample cassette — v1 session |
 | `examples/recordings/calculator-v2.vcr` | Sample cassette — v2 session |
 | `examples/recordings/calculator-errors.vcr` | Sample cassette — error scenarios |
+
+---
+
+## Running tests (Python and TypeScript)
+
+- **Python:** From `python/`, run `pytest tests/ -v`. See [CONTRIBUTING.md](CONTRIBUTING.md#getting-started).
+- **TypeScript:** From `typescript/`, run `npm install`, `npm run build`, then `npm test`. See [typescript/README.md](typescript/README.md).
 
 ---
 

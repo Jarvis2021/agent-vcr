@@ -4,6 +4,8 @@ Thanks for your interest in contributing. Agent VCR is an open-source project an
 
 ## Getting Started
 
+### Python
+
 ```bash
 git clone https://github.com/jarvis2021/agent-vcr.git
 cd agent-vcr/python
@@ -19,11 +21,24 @@ pytest tests/ -v
 
 > **Why uv?** It's 10-100x faster than pip, creates isolated environments by default, and is the standard Python package manager in 2026. Install it with `curl -LsSf https://astral.sh/uv/install.sh | sh` or `brew install uv`.
 
+### TypeScript
+
+```bash
+cd agent-vcr/typescript
+
+npm install
+npm run build
+
+# Note: tests/ is currently empty — adding tests is a high-priority contribution.
+```
+
+See [typescript/README.md](typescript/README.md) for full TypeScript usage and API docs.
+
 ## What We Need Help With
 
 **High-impact areas:**
 
-- **TypeScript port** — The `typescript/` directory is stubbed out. Porting the core (format, matcher, replayer) to TypeScript would unlock the Node.js MCP ecosystem.
+- **TypeScript tests** — The `typescript/` directory has source code but zero tests. Adding unit tests (Vitest) and integration tests with parity to the Python suite is the #1 priority contribution.
 - **More matching strategies** — Custom matchers, regex-based param matching, response template interpolation.
 - **Transport plugins** — WebSocket transport, HTTP/2, custom protocol adapters.
 - **Real-world cassettes** — Example `.vcr` recordings from popular MCP servers (filesystem, GitHub, Slack, etc.) for the test suite.
@@ -51,8 +66,8 @@ Open an issue with:
 1. Fork the repo and create a branch from `main`
 2. Write your code — follow the existing style (type hints, docstrings, Pydantic models)
 3. Add tests — we aim for comprehensive coverage. If you add a feature, add tests.
-4. Run the test suite: `pytest tests/ -v`
-5. Run the linter: `ruff check src/`
+4. Run the test suite: `pytest tests/ -v` (Python) or `npm test` (TypeScript, from `typescript/`)
+5. Run the linter: `ruff check src/` (Python) or `npm run lint` (TypeScript)
 6. Open a pull request with a clear description of what and why
 
 ### Code Style

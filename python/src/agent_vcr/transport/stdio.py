@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import sys
 from typing import Callable
 
@@ -32,6 +33,7 @@ class StdioTransport(BaseTransport):
         server_command: str,
         server_args: list[str] | None = None,
         server_env: dict[str, str] | None = None,
+        client_stdin_fd: int | None = None,
     ) -> None:
         """Initialize the stdio transport.
 
@@ -41,10 +43,13 @@ class StdioTransport(BaseTransport):
             server_env: Environment variables for the server process. If None, inherits
                 from the current process. To merge with current env, pass
                 {**os.environ, ...your_vars...}.
+            client_stdin_fd: Optional fd to read client input from (e.g. pipe read end).
+                When set, used instead of sys.stdin for demo/automated recording.
         """
         self._server_command = server_command
         self._server_args = server_args or []
         self._server_env = server_env
+        self._client_stdin_fd = client_stdin_fd
         self._is_connected = False
         self._on_client_message: Callable[[dict], dict | None] | None = None
         self._on_server_message: Callable[[dict], dict | None] | None = None
@@ -203,77 +208,100 @@ class StdioTransport(BaseTransport):
     async def _read_messages(self) -> None:
         """Read and proxy messages from both client stdin and server stdout.
 
-        This task runs continuously, reading newline-delimited JSON from both
-        the client (stdin) and server (stdout), invoking callbacks, and forwarding.
+        Runs two concurrent flows: one reading server stdout, one reading client stdin.
+        This allows the client to send first (MCP initialize), avoiding deadlock where
+        the server waits for input and the transport was waiting for server output.
         """
-        assert self._process and self._process.stdout
+        if not self._process or not self._process.stdout:
+            raise RuntimeError("Cannot read messages: server process not started or stdout unavailable")
 
         loop = asyncio.get_event_loop()
         client_reader = asyncio.StreamReader()
-        protocol = asyncio.StreamReaderProtocol(client_reader)
+        stdin_fd = self._client_stdin_fd if self._client_stdin_fd is not None else sys.stdin.fileno()
 
-        # Get stdin as a reader using add_reader
         def _read_client_stdin() -> None:
             try:
-                data = sys.stdin.buffer.read(4096)
+                if self._client_stdin_fd is not None:
+                    buf = os.read(self._client_stdin_fd, 4096)
+                    data = buf if buf else b""
+                    if not data:
+                        client_reader.feed_eof()
+                        try:
+                            loop.remove_reader(stdin_fd)
+                        except Exception:
+                            pass
+                        return
+                else:
+                    data = sys.stdin.buffer.read(4096)
+                    if not data:
+                        client_reader.feed_eof()
+                        return
                 if data:
                     client_reader.feed_data(data)
-                else:
-                    client_reader.feed_eof()
             except Exception as e:
                 logger.error("Error reading from client stdin: %s", e)
                 client_reader.feed_eof()
 
         try:
-            # Add stdin reader callback
-            loop.add_reader(sys.stdin.fileno(), _read_client_stdin)
+            loop.add_reader(stdin_fd, _read_client_stdin)
 
-            while not self._shutdown:
-                # Read from server stdout
-                server_line = await asyncio.wait_for(
-                    self._process.stdout.readline(), timeout=30.0
-                )
-                if not server_line:
-                    logger.info("Server stdout closed")
-                    break
-
+            async def _read_from_server() -> None:
+                """Read server stdout and forward to client."""
                 try:
-                    server_message = json.loads(server_line.decode("utf-8").strip())
-                    logger.debug("Received from server: %s", server_message)
-
-                    # Invoke callback
-                    if self._on_server_message:
+                    while not self._shutdown and self._process and self._process.stdout:
+                        server_line = await asyncio.wait_for(
+                            self._process.stdout.readline(), timeout=60.0
+                        )
+                        if not server_line:
+                            logger.info("Server stdout closed")
+                            return
                         try:
-                            forwarded = self._on_server_message(server_message)
-                        except Exception as e:
-                            logger.exception("Exception in on_server_message callback: %s", e)
-                            forwarded = server_message
-                    else:
-                        forwarded = server_message
-
-                    # Forward to client if not suppressed
-                    if forwarded is not None:
-                        await self.send_to_client(forwarded)
-
-                except json.JSONDecodeError as e:
-                    logger.error("Failed to parse server message: %s", e)
-                except ConnectionError as e:
-                    logger.error("Failed to forward server message to client: %s", e)
-                    break
-
-                # Also check for client stdin
-                # Note: This is a simplified approach; for production, consider using
-                # a more sophisticated multiplexing approach.
-                try:
-                    client_line = await asyncio.wait_for(
-                        client_reader.readline(), timeout=0.1
+                            server_message = json.loads(server_line.decode("utf-8").strip())
+                            logger.debug("Received from server: %s", server_message)
+                            if self._on_server_message:
+                                try:
+                                    forwarded = self._on_server_message(server_message)
+                                except Exception as e:
+                                    logger.exception(
+                                        "Exception in on_server_message callback: %s", e
+                                    )
+                                    forwarded = server_message
+                            else:
+                                forwarded = server_message
+                            if forwarded is not None:
+                                await self.send_to_client(forwarded)
+                        except json.JSONDecodeError as e:
+                            logger.error("Failed to parse server message: %s", e)
+                        except ConnectionError as e:
+                            logger.error("Failed to forward server message to client: %s", e)
+                            return
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    logger.error(
+                        "Error in server read loop: %s %s",
+                        type(e).__name__,
+                        e or "(no message)",
                     )
-                    if client_line:
-                        try:
-                            client_message = json.loads(client_line.decode("utf-8").strip())
-                            logger.debug("Received from client: %s", client_message)
 
-                            # Invoke callback
+            async def _read_from_client() -> None:
+                """Read client stdin and forward to server."""
+                try:
+                    while not self._shutdown:
+                        try:
+                            client_line = await asyncio.wait_for(
+                                client_reader.readline(), timeout=1.0
+                            )
+                        except asyncio.TimeoutError:
+                            continue
+                        if not client_line:
+                            logger.info("Client stdin closed")
+                            return
+                        try:
+                            client_message = json.loads(
+                                client_line.decode("utf-8").strip()
+                            )
+                            logger.debug("Received from client: %s", client_message)
                             if self._on_client_message:
                                 try:
                                     forwarded = self._on_client_message(client_message)
@@ -284,29 +312,44 @@ class StdioTransport(BaseTransport):
                                     forwarded = client_message
                             else:
                                 forwarded = client_message
-
-                            # Forward to server if not suppressed
                             if forwarded is not None:
                                 await self.send_to_server(forwarded)
-
                         except json.JSONDecodeError as e:
                             logger.error("Failed to parse client message: %s", e)
                         except ConnectionError as e:
-                            logger.error("Failed to forward client message to server: %s", e)
-                            break
-                except asyncio.TimeoutError:
-                    pass
+                            logger.error(
+                                "Failed to forward client message to server: %s", e
+                            )
+                            return
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    logger.error(
+                        "Error in client read loop: %s %s",
+                        type(e).__name__,
+                        e or "(no message)",
+                    )
 
+            await asyncio.gather(_read_from_server(), _read_from_client())
         except asyncio.CancelledError:
             logger.debug("Message reader cancelled")
             raise
         except Exception as e:
-            logger.error("Error in message reading loop: %s", e)
+            logger.error(
+                "Error in message reading loop: %s %s",
+                type(e).__name__,
+                e or "(no message)",
+            )
         finally:
             try:
-                loop.remove_reader(sys.stdin.fileno())
+                loop.remove_reader(stdin_fd)
             except Exception:
                 pass
+            if self._client_stdin_fd is not None:
+                try:
+                    os.close(self._client_stdin_fd)
+                except OSError:
+                    pass
             self._is_connected = False
 
     async def _monitor_process(self) -> None:

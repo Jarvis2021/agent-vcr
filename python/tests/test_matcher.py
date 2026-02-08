@@ -444,23 +444,25 @@ class TestMatcherFuzzyStrategy:
         assert len(matches) == 1
 
     def test_fuzzy_mixed_type_params(self):
-        """Fuzzy match requires exact match for non-dict/list."""
+        """Fuzzy match rejects when request has list params and recorded has dict."""
         matcher = RequestMatcher(strategy="fuzzy")
 
         request = JSONRPCRequest(
             jsonrpc="2.0",
             id=1,
             method="test",
-            params="string",
+            params=["a", "b"],
         )
 
-        interaction = create_interaction("test", "string")
+        # List vs dict should not match
+        interaction = create_interaction("test", {"key": "value"})
         matches = matcher.find_all_matches(request, [interaction])
-        assert len(matches) == 1
+        assert len(matches) == 0
 
-        interaction2 = create_interaction("test", "different")
+        # List vs same list should match
+        interaction2 = create_interaction("test", ["a", "b"])
         matches2 = matcher.find_all_matches(request, [interaction2])
-        assert len(matches2) == 0
+        assert len(matches2) == 1
 
 
 # ===== Strategy: Sequential Matching =====

@@ -6,12 +6,11 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Node 18+](https://img.shields.io/badge/node-18+-green.svg)](https://nodejs.org/)
 
-<!-- Replace DEMO_ID with your asciinema recording ID after uploading -->
 ![Agent VCR Demo](assets/demo.gif)
 
 Agent VCR is a testing framework for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io). It transparently records all JSON-RPC 2.0 interactions between an MCP client and server, then replays them deterministically for testing — no real server needed.
 
-**Available for Python and TypeScript/Node.js** with full cross-language compatibility — recordings created in one language can be replayed in the other.
+The Python implementation is complete and production-ready. A TypeScript/Node.js port exists as source code but is not yet tested — see [typescript/README.md](typescript/README.md) for current status.
 
 ## The Problem
 
@@ -323,7 +322,7 @@ The replayer supports 5 matching strategies for finding recorded responses:
 
 | Strategy | Description | Use Case |
 |----------|-------------|----------|
-| `exact` | Full JSON match (excluding jsonrpc field) | Strictest testing |
+| `exact` | Full JSON match (excluding jsonrpc and id fields) | Strictest testing |
 | `method` | Match by method name only | Broad matching |
 | `method_and_params` | Match method + full params *(default)* | Standard testing |
 | `fuzzy` | Match method + partial params (subset) | Flexible testing |
@@ -362,35 +361,19 @@ Recordings use a JSON-based `.vcr` format:
 }
 ```
 
-## Python vs TypeScript — Choose Your Stack
+## Python vs TypeScript
 
-Agent VCR is available in both Python and TypeScript/Node.js with **100% feature parity** and **cross-language compatibility**:
+The Python implementation is **complete and tested** (178 tests). The TypeScript/Node.js source code mirrors the same architecture but **has no tests yet** — it should be considered experimental.
 
-| Feature | Python | TypeScript | Notes |
-|---------|--------|------------|-------|
-| CLI (record/replay/diff) | ✅ | ✅ | Identical commands |
-| Programmatic API | ✅ | ✅ | Same patterns |
-| Test framework integration | pytest | Jest, Vitest | Native plugins |
-| Transport support | stdio, SSE | stdio, SSE | Full compatibility |
-| Recording format | `.vcr` (JSON) | `.vcr` (JSON) | Interchangeable |
-| Match strategies | 5 strategies | 5 strategies | Same behavior |
-| Error injection | ✅ | ✅ | |
-| Diff engine | ✅ | ✅ | Breaking change detection |
+| Aspect | Python | TypeScript |
+|--------|--------|------------|
+| Status | Production-ready | Source only (untested) |
+| Tests | 178 tests passing | None yet |
+| CLI | Fully functional | Built, not verified |
+| Test framework | pytest plugin | Jest/Vitest plugins (untested) |
+| Recording format | `.vcr` (JSON) | `.vcr` (JSON) — same format |
 
-**Cross-language workflow:**
-```bash
-# Record with Python
-python -m agent_vcr record --server-command "node server.js" -o recording.vcr
-
-# Replay with TypeScript
-npx agent-vcr replay -i recording.vcr
-
-# Or the reverse — it just works!
-```
-
-**Language-specific documentation:**
-- [Python README](python/README.md)
-- [TypeScript README](typescript/README.md)
+**Cross-language recordings:** The `.vcr` format is plain JSON, so recordings created by Python should be loadable by the TypeScript implementation once it's tested.
 
 ## Architecture
 
@@ -434,7 +417,11 @@ typescript/src/
     └── vitest.ts      # Vitest integration
 ```
 
+> **Note:** TypeScript source files exist but have no tests. Consider it experimental.
+
 ## Development
+
+### Python
 
 ```bash
 # Clone and install
@@ -457,6 +444,29 @@ ruff check src/
 
 # Type check
 mypy src/
+```
+
+### TypeScript
+
+```bash
+cd agent-vcr/typescript
+
+# Install dependencies
+npm install
+
+# Build
+npm run build
+
+# Note: No tests exist yet — adding tests is a priority contribution.
+# See CONTRIBUTING.md for how to help.
+```
+
+### Run all tests (Python + TypeScript)
+
+From the repo root:
+
+```bash
+cd python && uv run pytest tests/ -v
 ```
 
 ## Contributing

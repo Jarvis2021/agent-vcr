@@ -4,10 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import shlex
 import sys
 from pathlib import Path
 from typing import Any
+
+# Demo requests sent automatically when --demo is used (Lab 1 / tutorial).
+DEMO_RECORD_REQUESTS = [
+    '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"tutorial","version":"1.0.0"}}}',
+    '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}',
+    '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"add","arguments":{"a":15,"b":27}}}',
+    '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"multiply","arguments":{"a":6,"b":7}}}',
+]
 
 import click
 from rich.console import Console
@@ -74,6 +83,11 @@ def cli() -> None:
     multiple=True,
     help="Add tags to the recording (key=value, can be specified multiple times)",
 )
+@click.option(
+    "--demo",
+    is_flag=True,
+    help="Send tutorial requests automatically and stop (no pasting). Stdio only.",
+)
 def record(
     transport: str,
     server_command: str | None,
@@ -82,11 +96,13 @@ def record(
     output: str,
     method_filter: tuple[str, ...],
     tags: tuple[str, ...],
+    demo: bool,
 ) -> None:
     """Record MCP interactions to a VCR file.
 
     Example:
         agent-vcr record --transport stdio --server-command "node server.js" --output session.vcr
+        agent-vcr record --transport stdio --server-command "python demo/servers/calculator_v1.py" -o out.vcr --demo
         agent-vcr record --transport sse --server-url http://localhost:3000/sse --output session.vcr
     """
     try:
@@ -95,6 +111,8 @@ def record(
             raise click.ClickException("--server-command is required for stdio transport")
         if transport == "sse" and not server_url:
             raise click.ClickException("--server-url is required for sse transport")
+        if demo and transport != "stdio":
+            raise click.ClickException("--demo is only supported with --transport stdio")
 
         # Parse tags
         tag_dict = {}
@@ -114,6 +132,12 @@ def record(
             parsed_command = parts[0]
             parsed_args = parts[1:] + parsed_args
 
+        # For --demo we feed client input from a pipe instead of terminal
+        client_stdin_fd: int | None = None
+        if demo:
+            r_fd, w_fd = os.pipe()
+            client_stdin_fd = r_fd
+
         # Create recorder
         recorder = MCPRecorder(
             transport=transport,
@@ -122,6 +146,7 @@ def record(
             server_url=server_url,
             metadata_tags=tag_dict,
             filter_methods=set(method_filter) if method_filter else None,
+            client_stdin_fd=client_stdin_fd,
         )
 
         console.print(f"[bold green]Starting recording[/bold green]")
@@ -133,12 +158,36 @@ def record(
         console.print(f"  Output: {output}")
         if method_filter:
             console.print(f"  Methods: {', '.join(method_filter)}")
+        if demo:
+            console.print("  [dim]Demo mode: sending tutorial requests automatically[/dim]")
         console.print()
-        console.print("[yellow]Press Ctrl+C to stop recording[/yellow]")
+        if not demo:
+            console.print("[yellow]Press Ctrl+C to stop recording[/yellow]")
         console.print()
 
-        # Run recording
-        asyncio.run(recorder.record(output))
+        if demo:
+            # Send demo requests on a pipe, then signal stop after a delay
+            async def demo_driver(write_fd: int) -> None:
+                await asyncio.sleep(1.5)
+                for line in DEMO_RECORD_REQUESTS:
+                    os.write(write_fd, (line + "\n").encode("utf-8"))
+                try:
+                    os.close(write_fd)
+                except OSError:
+                    pass
+                await asyncio.sleep(4)
+                recorder.request_stop()
+
+            async def run_demo() -> None:
+                task_record = asyncio.create_task(recorder.record(output))
+                task_driver = asyncio.create_task(demo_driver(w_fd))
+                await asyncio.gather(task_record, task_driver)
+
+            asyncio.run(run_demo())
+            console.print("[green]Demo recording saved.[/green]")
+        else:
+            # Run recording (interactive)
+            asyncio.run(recorder.record(output))
 
     except click.ClickException:
         raise

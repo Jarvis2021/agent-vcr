@@ -111,6 +111,7 @@ class MCPRecorder:
         metadata_tags: Optional[dict[str, str]] = None,
         filter_methods: Optional[set[str]] = None,
         auto_save_interval: float = 0.0,
+        client_stdin_fd: Optional[int] = None,
     ) -> None:
         """Initialize the MCPRecorder.
 
@@ -125,6 +126,7 @@ class MCPRecorder:
             metadata_tags: Custom metadata tags
             filter_methods: Set of method names to record (None = all)
             auto_save_interval: Seconds between auto-saves (0 = disabled)
+            client_stdin_fd: Optional fd to read client input from (stdio only, for --demo).
 
         Raises:
             ValueError: If required parameters for transport type are missing
@@ -147,6 +149,7 @@ class MCPRecorder:
         self.metadata_tags = metadata_tags or {}
         self.filter_methods = filter_methods
         self.auto_save_interval = auto_save_interval
+        self._client_stdin_fd = client_stdin_fd
 
         # Transport instance (set up during start)
         self._transport: Optional[StdioTransport | SSETransport] = None
@@ -160,6 +163,7 @@ class MCPRecorder:
 
         # Recording state
         self._is_recording = False
+        self._requested_stop = False  # signal to exit record() loop without calling stop() yet
         self._recording_start_time: Optional[float] = None
         self._last_auto_save: float = 0.0
         self._initialize_captured = False
@@ -187,11 +191,15 @@ class MCPRecorder:
 
         await self.start()
         try:
-            # Wait indefinitely for stop() to be called
-            while self._is_recording:
+            # Wait until stop() is called or request_stop() signals exit
+            while self._is_recording and not self._requested_stop:
                 await asyncio.sleep(0.1)
         finally:
             return await self.stop(output_path)
+
+    def request_stop(self) -> None:
+        """Signal the recorder to exit the record() loop (e.g. for --demo). stop() will then run in finally."""
+        self._requested_stop = True
 
     async def start(self) -> None:
         """Start recording (non-blocking).
@@ -213,6 +221,7 @@ class MCPRecorder:
                 server_command=self.server_command,
                 server_args=self.server_args,
                 server_env=self.server_env,
+                client_stdin_fd=self._client_stdin_fd,
             )
         else:  # sse
             self._transport = SSETransport(
@@ -223,6 +232,7 @@ class MCPRecorder:
 
         # Set recording state (but not recording yet - wait for initialize)
         self._is_recording = True
+        self._requested_stop = False
         self._recording_start_time = time.time()
         self._last_auto_save = self._recording_start_time
         self._initialize_captured = False
@@ -269,9 +279,10 @@ class MCPRecorder:
 
         with open(output_path, "w") as f:
             json.dump(
-                recording.model_dump(mode="json", default=str),
+                recording.model_dump(mode="json"),
                 f,
                 indent=2,
+                default=str,
             )
 
         self._is_recording = False
