@@ -4,11 +4,14 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Node 18+](https://img.shields.io/badge/node-18+-green.svg)](https://nodejs.org/)
 
 <!-- Replace DEMO_ID with your asciinema recording ID after uploading -->
 ![Agent VCR Demo](assets/demo.gif)
 
 Agent VCR is a testing framework for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io). It transparently records all JSON-RPC 2.0 interactions between an MCP client and server, then replays them deterministically for testing — no real server needed.
+
+**Available for Python and TypeScript/Node.js** with full cross-language compatibility — recordings created in one language can be replayed in the other.
 
 ## The Problem
 
@@ -109,12 +112,22 @@ print(f"Breaking changes: {len(result.breaking_changes)}")
 
 > **New to Agent VCR?** Follow the [hands-on tutorial](TUTORIAL.md) — 12 labs covering every use case with real commands.
 
+### Installation
+
+**Python:**
 ```bash
 # Recommended
 uv pip install agent-vcr
 
 # Or with pip
 pip install agent-vcr
+```
+
+**TypeScript/Node.js:**
+```bash
+npm install @agent-vcr/core
+# or
+pnpm add @agent-vcr/core
 ```
 
 ### Record a session
@@ -349,12 +362,43 @@ Recordings use a JSON-based `.vcr` format:
 }
 ```
 
+## Python vs TypeScript — Choose Your Stack
+
+Agent VCR is available in both Python and TypeScript/Node.js with **100% feature parity** and **cross-language compatibility**:
+
+| Feature | Python | TypeScript | Notes |
+|---------|--------|------------|-------|
+| CLI (record/replay/diff) | ✅ | ✅ | Identical commands |
+| Programmatic API | ✅ | ✅ | Same patterns |
+| Test framework integration | pytest | Jest, Vitest | Native plugins |
+| Transport support | stdio, SSE | stdio, SSE | Full compatibility |
+| Recording format | `.vcr` (JSON) | `.vcr` (JSON) | Interchangeable |
+| Match strategies | 5 strategies | 5 strategies | Same behavior |
+| Error injection | ✅ | ✅ | |
+| Diff engine | ✅ | ✅ | Breaking change detection |
+
+**Cross-language workflow:**
+```bash
+# Record with Python
+python -m agent_vcr record --server-command "node server.js" -o recording.vcr
+
+# Replay with TypeScript
+npx agent-vcr replay -i recording.vcr
+
+# Or the reverse — it just works!
+```
+
+**Language-specific documentation:**
+- [Python README](python/README.md)
+- [TypeScript README](typescript/README.md)
+
 ## Architecture
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design, data flow diagrams, and design decisions.
 
+**Python:**
 ```
-agent_vcr/
+python/src/agent_vcr/
 ├── core/
 │   ├── format.py      # Pydantic models for .vcr format
 │   ├── matcher.py     # Request matching strategies
@@ -368,6 +412,26 @@ agent_vcr/
 ├── diff.py            # Recording comparison engine
 ├── cli.py             # Command-line interface
 └── pytest_plugin.py   # Pytest integration
+```
+
+**TypeScript:**
+```
+typescript/src/
+├── core/
+│   ├── format.ts      # Zod schemas for .vcr format
+│   ├── matcher.ts     # Request matching strategies
+│   └── session.ts     # Session lifecycle management
+├── transport/
+│   ├── base.ts        # Abstract transport interface
+│   ├── stdio.ts       # Subprocess stdio proxy
+│   └── sse.ts         # HTTP+SSE proxy
+├── recorder.ts        # Transparent recording proxy
+├── replayer.ts        # Mock server from recordings
+├── diff.ts            # Recording comparison engine
+├── cli.ts             # Command-line interface
+└── integrations/
+    ├── jest.ts        # Jest integration
+    └── vitest.ts      # Vitest integration
 ```
 
 ## Development
