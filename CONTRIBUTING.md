@@ -1,0 +1,81 @@
+# Contributing to Agent VCR
+
+Thanks for your interest in contributing. Agent VCR is an open-source project and contributions are welcome.
+
+## Getting Started
+
+```bash
+git clone https://github.com/pvoola/agent-vcr.git
+cd agent-vcr/python
+pip install -e ".[dev]"
+pytest tests/ -v
+```
+
+## What We Need Help With
+
+**High-impact areas:**
+
+- **TypeScript port** — The `typescript/` directory is stubbed out. Porting the core (format, matcher, replayer) to TypeScript would unlock the Node.js MCP ecosystem.
+- **More matching strategies** — Custom matchers, regex-based param matching, response template interpolation.
+- **Transport plugins** — WebSocket transport, HTTP/2, custom protocol adapters.
+- **Real-world cassettes** — Example `.vcr` recordings from popular MCP servers (filesystem, GitHub, Slack, etc.) for the test suite.
+- **Documentation** — Tutorials, how-to guides, video walkthroughs.
+
+**Good first issues:**
+
+- Add `--timeout` flag to the `record` CLI command
+- Implement `VCRRecording.merge()` to combine multiple recordings
+- Add YAML output format to `inspect` command
+- Write integration tests with a simple echo MCP server
+
+## How to Contribute
+
+### Bug Reports
+
+Open an issue with:
+- What you expected to happen
+- What actually happened
+- Steps to reproduce
+- Python version and OS
+
+### Code Changes
+
+1. Fork the repo and create a branch from `main`
+2. Write your code — follow the existing style (type hints, docstrings, Pydantic models)
+3. Add tests — we aim for comprehensive coverage. If you add a feature, add tests.
+4. Run the test suite: `pytest tests/ -v`
+5. Run the linter: `ruff check src/`
+6. Open a pull request with a clear description of what and why
+
+### Code Style
+
+- Python 3.10+ with type hints on all public functions
+- Pydantic v2 for data models (`model_dump()`, `model_validate()`)
+- Google-style docstrings with Args/Returns/Raises
+- 100 character line length
+- Use `ruff` for formatting and linting
+
+See [CLAUDE.md](CLAUDE.md) for the full coding conventions, especially the "Critical API Rules" section — these are the patterns that trip people up most.
+
+### Architecture Decisions
+
+For significant changes (new transport, new matching strategy, file format changes), please open an issue first to discuss the approach. See [ARCHITECTURE.md](ARCHITECTURE.md) for the system design and known limitations.
+
+## Project Structure
+
+```
+python/
+├── src/agent_vcr/
+│   ├── core/          # Data models, session, matcher
+│   ├── transport/     # stdio and SSE proxies
+│   ├── recorder.py    # Recording engine
+│   ├── replayer.py    # Mock server
+│   ├── diff.py        # Comparison engine
+│   ├── cli.py         # CLI interface
+│   └── pytest_plugin.py
+└── tests/             # Unit tests (pytest)
+```
+
+## License
+
+By contributing, you agree that your contributions will be licensed under the MIT License.
