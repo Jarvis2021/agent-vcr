@@ -1,25 +1,33 @@
 """Request matcher for VCR replay — matches incoming requests to recorded interactions."""
 
+import threading
 from typing import Dict, List, Literal, Optional, Any
 
 from agent_vcr.core.format import JSONRPCRequest, VCRInteraction
 
 
-MatchStrategy = Literal["exact", "method", "method_and_params", "fuzzy", "sequential"]
+MatchStrategy = Literal["exact", "method", "method_and_params", "subset", "fuzzy", "sequential"]
+
+# "fuzzy" is a deprecated alias for "subset" — kept for backward compatibility
+_STRATEGY_ALIASES = {"fuzzy": "subset"}
 
 
 class RequestMatcher:
     """Matches incoming requests to recorded interactions using various strategies.
 
     Strategies:
-    - exact: Exact JSON match of the entire request
+    - exact: Exact JSON match of the entire request (excluding jsonrpc and id)
     - method: Match by method name only
     - method_and_params: Match method + full params (default)
-    - fuzzy: Match method + partial params (subset matching)
+    - subset: Match method + partial params (request params must be a subset of recorded)
     - sequential: Return interactions in order regardless of match
+
+    Note: "fuzzy" is accepted as a deprecated alias for "subset".
+
+    Thread-safe: all mutable state is protected by a lock for concurrent replay.
     """
 
-    VALID_STRATEGIES = {"exact", "method", "method_and_params", "fuzzy", "sequential"}
+    VALID_STRATEGIES = {"exact", "method", "method_and_params", "subset", "fuzzy", "sequential"}
 
     def __init__(self, strategy: MatchStrategy = "method_and_params") -> None:
         """Initialize the request matcher.
@@ -35,30 +43,58 @@ class RequestMatcher:
                 f"Unknown matching strategy: '{strategy}'. "
                 f"Valid strategies: {', '.join(sorted(self.VALID_STRATEGIES))}"
             )
-        self.strategy = strategy
+        # Resolve deprecated aliases
+        self.strategy = _STRATEGY_ALIASES.get(strategy, strategy)
         self._sequential_index = 0
+        self._lock = threading.Lock()
+        # Track how many times each interaction (by sequence number) has been used,
+        # so concurrent duplicate requests get different recorded responses.
+        self._usage_counts: dict[int, int] = {}
 
-    def reset_sequential_index(self) -> None:
-        """Reset the sequential index counter.
+    def reset(self) -> None:
+        """Reset the matcher state (sequential index and usage counts).
 
         Used when starting a new replay or replay session.
         """
-        self._sequential_index = 0
+        with self._lock:
+            self._sequential_index = 0
+            self._usage_counts.clear()
+
+    def reset_sequential_index(self) -> None:
+        """Reset the sequential index counter (backward compatibility alias for reset()).
+
+        Used when starting a new replay or replay session.
+        """
+        self.reset()
 
     def find_match(
         self, request: JSONRPCRequest, interactions: List[VCRInteraction]
     ) -> Optional[VCRInteraction]:
         """Find a single matching interaction for the given request.
 
+        For non-sequential strategies, tracks usage so that concurrent
+        duplicate requests get different recorded responses when available.
+
         Args:
             request: The incoming request to match
             interactions: List of recorded interactions to search
 
         Returns:
-            The first matching VCRInteraction, or None if no match found
+            The best matching VCRInteraction, or None if no match found
         """
         matches = self.find_all_matches(request, interactions)
-        return matches[0] if matches else None
+        if not matches:
+            return None
+
+        # For sequential, find_all_matches already returns the right one
+        if self.strategy == "sequential":
+            return matches[0]
+
+        # For other strategies, pick the least-used match to handle concurrent duplicates
+        with self._lock:
+            best = min(matches, key=lambda m: self._usage_counts.get(m.sequence, 0))
+            self._usage_counts[best.sequence] = self._usage_counts.get(best.sequence, 0) + 1
+            return best
 
     def find_all_matches(
         self, request: JSONRPCRequest, interactions: List[VCRInteraction]
@@ -80,15 +116,15 @@ class RequestMatcher:
             return self._match_method(request, interactions)
         elif self.strategy == "method_and_params":
             return self._match_method_and_params(request, interactions)
-        elif self.strategy == "fuzzy":
-            return self._match_fuzzy(request, interactions)
+        elif self.strategy == "subset":
+            return self._match_subset(request, interactions)
         else:
             raise ValueError(f"Unknown matching strategy: {self.strategy}")
 
     def _match_sequential(
         self, interactions: List[VCRInteraction]
     ) -> List[VCRInteraction]:
-        """Return the next interaction in sequential order.
+        """Return the next interaction in sequential order (thread-safe).
 
         Args:
             interactions: List of recorded interactions
@@ -96,11 +132,12 @@ class RequestMatcher:
         Returns:
             A single-item list with the next interaction, or empty list if exhausted
         """
-        if self._sequential_index < len(interactions):
-            match = interactions[self._sequential_index]
-            self._sequential_index += 1
-            return [match]
-        return []
+        with self._lock:
+            if self._sequential_index < len(interactions):
+                match = interactions[self._sequential_index]
+                self._sequential_index += 1
+                return [match]
+            return []
 
     def _match_exact(
         self, request: JSONRPCRequest, interactions: List[VCRInteraction]
@@ -167,7 +204,7 @@ class RequestMatcher:
 
         return matches
 
-    def _match_fuzzy(
+    def _match_subset(
         self, request: JSONRPCRequest, interactions: List[VCRInteraction]
     ) -> List[VCRInteraction]:
         """Match by method and partial params (subset matching).

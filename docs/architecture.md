@@ -129,8 +129,10 @@ The replayer supports five strategies for matching incoming requests to recorded
 | `exact` | Full JSON equality of request (excluding `jsonrpc` and `id` fields) | Strictest regression tests |
 | `method` | Method name only | Broad acceptance tests |
 | `method_and_params` | Method name + full params equality | Standard testing (default) |
-| `fuzzy` | Method name + params subset (dict keys in request must exist in recorded) | Flexible/partial matching |
+| `subset` | Method name + params subset (dict keys in request must exist in recorded) | Flexible/partial matching |
 | `sequential` | Returns interactions in order, ignoring request content | Ordered replay scripts |
+
+*Note: The `fuzzy` strategy is deprecated; use `subset` instead. `fuzzy` is kept as an alias for backward compatibility.*
 
 ## Design Decisions
 
@@ -152,7 +154,7 @@ Each recording file is one client↔server session. **Multi-MCP** and **agent-to
 The current latency calculation measures time between consecutive `record_interaction()` calls rather than the true round-trip time for each specific request. For interleaved requests (multiple in-flight), latency values will be inaccurate. A future version should use per-request timestamps from the pending requests tracker.
 
 ### Notification Handling
-The data model supports notifications (VCRInteraction.notifications), but the recorder does not currently capture server-initiated notifications. These are parsed as responses and may be lost. Full notification support is planned.
+Server-initiated notifications are now fully captured in recordings and replayed deterministically. Notifications are stored in VCRInteraction.notifications and properly sequenced with request/response pairs.
 
 ### Transaction Safety
 File writes are not atomic. If the process crashes during `VCRRecording.save()`, the output file may be incomplete. A future version should write to a temporary file and rename atomically.

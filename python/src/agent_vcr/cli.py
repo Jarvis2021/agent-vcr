@@ -423,7 +423,7 @@ def _diff_projects(
 )
 @click.option(
     "--match-strategy",
-    type=click.Choice(["exact", "method", "method_and_params", "fuzzy", "sequential"]),
+    type=click.Choice(["exact", "method", "method_and_params", "subset", "fuzzy", "sequential"]),
     default="method_and_params",
     help="Strategy for matching incoming requests to recorded interactions",
 )
@@ -450,6 +450,17 @@ def _diff_projects(
     default=3100,
     help="Base port for replay --project (first recording on base-port, next on base-port+1, ...)",
 )
+@click.option(
+    "--simulate-latency",
+    is_flag=True,
+    help="Sleep for the recorded latency before responding (off by default for fast tests)",
+)
+@click.option(
+    "--latency-multiplier",
+    type=float,
+    default=1.0,
+    help="Multiplier for simulated latency (e.g. 0.5 = half speed, 2.0 = double). Requires --simulate-latency.",
+)
 def replay(
     file: str,
     transport: str,
@@ -458,6 +469,8 @@ def replay(
     port: int,
     project: str | None,
     base_port: int,
+    simulate_latency: bool,
+    latency_multiplier: float,
 ) -> None:
     """Replay MCP interactions from a VCR file or a project manifest.
 
@@ -478,6 +491,8 @@ def replay(
 
         # Load and validate recording
         replayer = MCPReplayer.from_file(file, match_strategy=match_strategy)
+        replayer.simulate_latency = simulate_latency
+        replayer.latency_multiplier = latency_multiplier
 
         console.print(f"[bold green]Loaded recording[/bold green]")
         console.print(f"  Interactions: {len(replayer.recording.session.interactions)}")
@@ -529,6 +544,11 @@ def replay(
     is_flag=True,
     help="Exit with code 1 if breaking changes are detected",
 )
+@click.option(
+    "--compare-latency",
+    is_flag=True,
+    help="Flag interactions where latency regressed significantly (>2x and >500ms increase)",
+)
 def diff(
     baseline: str | None,
     current: str | None,
@@ -536,6 +556,7 @@ def diff(
     current_project: str | None,
     format: str,
     fail_on_breaking: bool,
+    compare_latency: bool,
 ) -> None:
     """Compare two VCR recordings or two project manifests.
 
@@ -561,7 +582,10 @@ def diff(
         console.print()
         console.print("[bold cyan]Comparing interactions...[/bold cyan]")
 
-        diff_result = MCPDiff.compare(baseline_recording, current_recording)
+        diff_result = MCPDiff.compare(
+            baseline_recording, current_recording,
+            compare_latency=compare_latency,
+        )
 
         if format == "json":
             _output_diff_json(diff_result)
@@ -774,6 +798,264 @@ def diff_batch(pairs_file: str, fmt: str, fail_on_breaking: bool) -> None:
         raise click.ClickException(str(e))
     except Exception as e:
         raise click.ClickException(f"diff-batch failed: {e}")
+
+
+@cli.command()
+@click.argument("file", type=click.Path(exists=True))
+def validate(file: str) -> None:
+    """Validate a VCR recording file for correctness.
+
+    Checks: valid JSON, valid schema, no duplicate request IDs,
+    all interactions have responses, and sequence numbers are correct.
+
+    Example:
+        agent-vcr validate session.vcr
+    """
+    try:
+        console.print(f"[bold green]Validating[/bold green]: {file}")
+
+        # Load and parse
+        recording = VCRRecording.load(file)
+
+        issues: list[str] = []
+
+        # Check sequence numbers are contiguous from 0
+        interactions = recording.session.interactions
+        for i, interaction in enumerate(interactions):
+            if interaction.sequence != i:
+                issues.append(
+                    f"Sequence gap: expected {i}, got {interaction.sequence} "
+                    f"(method: {interaction.request.method})"
+                )
+
+        # Check for duplicate request IDs
+        seen_ids: dict[Any, int] = {}
+        for interaction in interactions:
+            rid = interaction.request.id
+            if rid in seen_ids:
+                issues.append(
+                    f"Duplicate request id={rid}: "
+                    f"interactions #{seen_ids[rid]} and #{interaction.sequence}"
+                )
+            seen_ids[rid] = interaction.sequence
+
+        # Check all interactions have responses
+        for interaction in interactions:
+            if interaction.response is None:
+                issues.append(
+                    f"Interaction #{interaction.sequence} ({interaction.request.method}) "
+                    "has no response"
+                )
+
+        # Check initialize handshake
+        init_req = recording.session.initialize_request
+        init_resp = recording.session.initialize_response
+        if init_req.method != "initialize":
+            issues.append(
+                f"Initialize request has wrong method: {init_req.method}"
+            )
+        if init_resp.result is None and init_resp.error is None:
+            issues.append("Initialize response has neither result nor error")
+
+        # Report
+        if not issues:
+            console.print(f"[bold green]✓ Valid[/bold green] — {len(interactions)} interactions, no issues")
+        else:
+            console.print(f"[bold red]✗ {len(issues)} issue(s) found:[/bold red]")
+            for issue in issues:
+                console.print(f"  • {issue}")
+            sys.exit(1)
+
+    except Exception as e:
+        raise click.ClickException(f"Validation failed: {e}")
+
+
+@cli.command()
+@click.argument("files", nargs=-1, required=True, type=click.Path(exists=True))
+@click.option(
+    "--output",
+    "-o",
+    required=True,
+    type=click.Path(),
+    help="Output path for the merged VCR file",
+)
+@click.option(
+    "--deduplicate",
+    is_flag=True,
+    help="Deduplicate interactions with same method+params (keep first occurrence)",
+)
+def merge(files: tuple[str, ...], output: str, deduplicate: bool) -> None:
+    """Merge multiple VCR recordings into one.
+
+    Combines interactions from all input files into a single recording.
+    Uses metadata from the first file.
+
+    Example:
+        agent-vcr merge session1.vcr session2.vcr -o combined.vcr
+        agent-vcr merge *.vcr -o all.vcr --deduplicate
+    """
+    try:
+        if len(files) < 2:
+            raise click.ClickException("Need at least 2 files to merge")
+
+        console.print(f"[bold green]Merging {len(files)} recordings[/bold green]")
+
+        recordings = [VCRRecording.load(f) for f in files]
+
+        # Use first recording as base
+        merged = recordings[0].model_copy(deep=True)
+        all_interactions = list(merged.session.interactions)
+
+        for rec in recordings[1:]:
+            all_interactions.extend(rec.session.interactions)
+
+        # Deduplicate by method+params if requested
+        if deduplicate:
+            seen: set[str] = set()
+            deduped = []
+            for interaction in all_interactions:
+                key = json.dumps(
+                    {"method": interaction.request.method, "params": interaction.request.params},
+                    sort_keys=True,
+                )
+                if key not in seen:
+                    seen.add(key)
+                    deduped.append(interaction)
+            removed = len(all_interactions) - len(deduped)
+            all_interactions = deduped
+            if removed:
+                console.print(f"  Removed {removed} duplicate(s)")
+
+        # Renumber sequences
+        for i, interaction in enumerate(all_interactions):
+            interaction.sequence = i
+
+        merged.session.interactions = all_interactions
+
+        # Save
+        output_path = Path(output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        merged.save(str(output_path))
+
+        console.print(f"[bold green]Merged[/bold green]: {len(all_interactions)} interactions -> {output}")
+
+    except click.ClickException:
+        raise
+    except Exception as e:
+        raise click.ClickException(f"Merge failed: {e}")
+
+
+@cli.command()
+@click.argument("file", type=click.Path(exists=True))
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format",
+)
+def stats(file: str, fmt: str) -> None:
+    """Show statistics for a VCR recording.
+
+    Displays method distribution, latency percentiles, error rate, and more.
+
+    Example:
+        agent-vcr stats session.vcr
+        agent-vcr stats session.vcr --format json
+    """
+    try:
+        recording = VCRRecording.load(file)
+        interactions = recording.session.interactions
+
+        # Gather stats
+        method_counts: dict[str, int] = {}
+        latencies: list[float] = []
+        error_count = 0
+        method_latencies: dict[str, list[float]] = {}
+
+        for interaction in interactions:
+            method = interaction.request.method
+            method_counts[method] = method_counts.get(method, 0) + 1
+
+            if interaction.latency_ms > 0:
+                latencies.append(interaction.latency_ms)
+                if method not in method_latencies:
+                    method_latencies[method] = []
+                method_latencies[method].append(interaction.latency_ms)
+
+            if interaction.response and interaction.response.error:
+                error_count += 1
+
+        total = len(interactions)
+        error_rate = (error_count / total * 100) if total > 0 else 0.0
+
+        # Compute percentiles
+        def percentile(data: list[float], p: float) -> float:
+            if not data:
+                return 0.0
+            sorted_data = sorted(data)
+            idx = int(len(sorted_data) * p / 100)
+            return sorted_data[min(idx, len(sorted_data) - 1)]
+
+        if fmt == "json":
+            output_data = {
+                "file": file,
+                "total_interactions": total,
+                "error_count": error_count,
+                "error_rate_pct": round(error_rate, 1),
+                "methods": method_counts,
+                "latency": {
+                    "avg_ms": round(sum(latencies) / len(latencies), 1) if latencies else 0,
+                    "p50_ms": round(percentile(latencies, 50), 1),
+                    "p95_ms": round(percentile(latencies, 95), 1),
+                    "p99_ms": round(percentile(latencies, 99), 1),
+                    "min_ms": round(min(latencies), 1) if latencies else 0,
+                    "max_ms": round(max(latencies), 1) if latencies else 0,
+                },
+                "slowest_methods": {
+                    method: round(sum(lats) / len(lats), 1)
+                    for method, lats in sorted(
+                        method_latencies.items(),
+                        key=lambda x: sum(x[1]) / len(x[1]),
+                        reverse=True,
+                    )[:5]
+                },
+            }
+            from rich.json import JSON as RichJSON
+            console.print(RichJSON.from_str(json.dumps(output_data, indent=2)))
+        else:
+            console.print(f"[bold cyan]Stats for[/bold cyan]: {file}")
+            console.print(f"  Total interactions: {total}")
+            console.print(f"  Error count: {error_count} ({error_rate:.1f}%)")
+            console.print(f"  Unique methods: {len(method_counts)}")
+            console.print()
+
+            if latencies:
+                avg = sum(latencies) / len(latencies)
+                console.print("[bold cyan]Latency[/bold cyan]")
+                console.print(f"  Avg:  {avg:.1f}ms")
+                console.print(f"  p50:  {percentile(latencies, 50):.1f}ms")
+                console.print(f"  p95:  {percentile(latencies, 95):.1f}ms")
+                console.print(f"  p99:  {percentile(latencies, 99):.1f}ms")
+                console.print(f"  Min:  {min(latencies):.1f}ms")
+                console.print(f"  Max:  {max(latencies):.1f}ms")
+                console.print()
+
+            console.print("[bold cyan]Methods[/bold cyan]")
+            table = Table()
+            table.add_column("Method", style="cyan")
+            table.add_column("Count", justify="right")
+            table.add_column("Avg Latency", justify="right")
+            for method, count in sorted(method_counts.items(), key=lambda x: -x[1]):
+                avg_lat = ""
+                if method in method_latencies:
+                    lats = method_latencies[method]
+                    avg_lat = f"{sum(lats) / len(lats):.1f}ms"
+                table.add_row(method, str(count), avg_lat)
+            console.print(table)
+
+    except Exception as e:
+        raise click.ClickException(f"Stats failed: {e}")
 
 
 def _output_diff_text(diff_result: MCPDiffResult) -> None:

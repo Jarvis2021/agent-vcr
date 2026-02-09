@@ -67,9 +67,10 @@ class ModifiedInteraction:
         """Check if the modification is backwards compatible.
 
         A modification is compatible if:
-        - The method name is the same
         - The response status hasn't changed (success -> error or vice versa)
-        - No required response fields are missing in current
+        - No response fields from baseline are removed in current
+        - Field types haven't changed in incompatible ways
+        - Error codes haven't changed (if both are errors)
 
         Returns:
             True if the modification is backwards compatible
@@ -85,6 +86,53 @@ class ModifiedInteraction:
         if not baseline_is_error and "result" not in self.current_response:
             return False
 
+        # Check for removed fields in response result (breaking)
+        if not baseline_is_error:
+            baseline_result = self.baseline_response.get("result")
+            current_result = self.current_response.get("result")
+            if isinstance(baseline_result, dict) and isinstance(current_result, dict):
+                if not self._check_fields_compatible(baseline_result, current_result):
+                    return False
+
+        # Check error code compatibility
+        if baseline_is_error and current_is_error:
+            baseline_error = self.baseline_response.get("error", {})
+            current_error = self.current_response.get("error", {})
+            if isinstance(baseline_error, dict) and isinstance(current_error, dict):
+                baseline_code = baseline_error.get("code")
+                current_code = current_error.get("code")
+                if baseline_code is not None and current_code is not None:
+                    if baseline_code != current_code:
+                        return False
+
+        return True
+
+    @staticmethod
+    def _check_fields_compatible(baseline: dict, current: dict) -> bool:
+        """Check if current dict is compatible with baseline (no removed fields, no type changes).
+
+        Args:
+            baseline: Baseline response result dict
+            current: Current response result dict
+
+        Returns:
+            True if compatible (all baseline fields exist in current with same types)
+        """
+        for key, baseline_value in baseline.items():
+            if key not in current:
+                # Field removed — breaking
+                return False
+            current_value = current[key]
+            # Type change check (but allow None -> value or value -> None)
+            if baseline_value is not None and current_value is not None:
+                if type(baseline_value) != type(current_value):
+                    return False
+                # Recurse into nested dicts
+                if isinstance(baseline_value, dict) and isinstance(current_value, dict):
+                    if not ModifiedInteraction._check_fields_compatible(
+                        baseline_value, current_value
+                    ):
+                        return False
         return True
 
     def to_dict(self) -> dict[str, Any]:
@@ -291,6 +339,9 @@ class MCPDiff:
         baseline: str | Path | VCRRecording,
         current: str | Path | VCRRecording,
         ignore_params: bool = False,
+        compare_latency: bool = False,
+        latency_threshold_factor: float = 2.0,
+        latency_threshold_ms: float = 500.0,
     ) -> MCPDiffResult:
         """Compare two VCR recordings and produce a diff.
 
@@ -298,6 +349,9 @@ class MCPDiff:
             baseline: Path to baseline .vcr file or VCRRecording object
             current: Path to current .vcr file or VCRRecording object
             ignore_params: If True, match by method name only
+            compare_latency: If True, flag interactions where latency regressed significantly
+            latency_threshold_factor: Flag if current latency > baseline * factor (default 2x)
+            latency_threshold_ms: Minimum absolute increase in ms to flag (default 500ms)
 
         Returns:
             MCPDiffResult with comparison results
@@ -387,6 +441,25 @@ class MCPDiff:
             if method not in current_by_method:
                 removed.extend(baseline_list)
                 breaking_changes.append(f"Method removed: {method}")
+
+        # Latency regression detection
+        if compare_latency:
+            for method, current_list in current_by_method.items():
+                baseline_list = baseline_by_method.get(method, [])
+                for curr_int in current_list:
+                    match = cls._find_matching_interaction(curr_int, baseline_list)
+                    if match and match.latency_ms > 0 and curr_int.latency_ms > 0:
+                        increase_ms = curr_int.latency_ms - match.latency_ms
+                        factor = curr_int.latency_ms / match.latency_ms if match.latency_ms > 0 else 1.0
+                        if (
+                            factor >= latency_threshold_factor
+                            and increase_ms >= latency_threshold_ms
+                        ):
+                            breaking_changes.append(
+                                f"Latency regression in {method}: "
+                                f"{match.latency_ms:.0f}ms -> {curr_int.latency_ms:.0f}ms "
+                                f"({factor:.1f}x slower, +{increase_ms:.0f}ms)"
+                            )
 
         is_identical = (
             not added and not removed and not modified and not breaking_changes
