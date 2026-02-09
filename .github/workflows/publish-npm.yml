@@ -1,0 +1,35 @@
+# Publish TypeScript package to npm on version tag (e.g. v0.1.0).
+# Requires repo secret: NPM_TOKEN (npm access token with publish permission).
+
+name: Publish TypeScript to npm
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    name: Build and publish to npm
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
