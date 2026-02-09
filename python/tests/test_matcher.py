@@ -53,9 +53,14 @@ class TestRequestMatcherInit:
 
     def test_init_with_strategy(self):
         """Can specify strategy on init."""
-        for strategy in ["exact", "method", "method_and_params", "fuzzy", "sequential"]:
+        for strategy in ["exact", "method", "method_and_params", "subset", "sequential"]:
             matcher = RequestMatcher(strategy=strategy)
             assert matcher.strategy == strategy
+
+    def test_fuzzy_alias_resolves_to_subset(self):
+        """'fuzzy' is accepted as deprecated alias for 'subset'."""
+        matcher = RequestMatcher(strategy="fuzzy")
+        assert matcher.strategy == "subset"
 
     def test_init_invalid_strategy(self):
         """Invalid strategy raises ValueError."""

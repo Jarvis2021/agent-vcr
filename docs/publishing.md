@@ -1,6 +1,6 @@
 # Publishing Guide
 
-> **Current status:** Python is ready to publish to PyPI. TypeScript has a full test suite (72 tests) and is ready to publish to npm.
+> **Current status:** Python is ready to publish to PyPI. TypeScript has 72 unit tests, full CLI, and is ready to publish to npm. Recording mode in test integrations is not yet implemented, but the package is otherwise complete.
 
 This guide covers how to publish Agent VCR to PyPI (Python) and npm (TypeScript).
 

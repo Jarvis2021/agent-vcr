@@ -40,7 +40,7 @@ cd ..
 agent-vcr --help
 ```
 
-You should see the CLI help showing `record`, `replay`, `diff`, and `inspect` commands.
+You should see the CLI help showing `record`, `replay`, `diff`, `inspect`, `validate`, `merge`, and `stats` commands.
 
 **TypeScript:** This tutorial uses the Python CLI and pytest. For the TypeScript/Node.js implementation, see [../typescript/README.md](../typescript/README.md). To run TypeScript tests: `cd typescript && npm install && npm run build && npm test`.
 
@@ -245,11 +245,11 @@ agent-vcr diff examples/recordings/calculator-v1.vcr examples/recordings/calcula
 
 ---
 
-## Lab 4: Golden Cassette Testing (Use Case #1)
+## Lab 4: Golden Cassette Testing & Compatibility Gates (Use Cases #1 & #2)
 
-**Goal:** Commit a "known good" recording to your repo and replay it in CI.
+**Goal:** Commit "known good" recordings to your repo and use them as CI gates to block breaking changes.
 
-### Step 4.1 — Create the golden cassette
+### Step 4.1 — Create golden cassettes
 
 ```bash
 mkdir -p cassettes
@@ -257,12 +257,22 @@ mkdir -p cassettes
 agent-vcr record \
   --transport stdio \
   --server-command "python demo/servers/calculator_v1.py" \
-  -o cassettes/golden.vcr
+  -o cassettes/golden-v1.vcr
 ```
 
 Send requests that cover your critical path (initialize → tools/list → tools/call), then `Ctrl+C`.
 
-### Step 4.2 — Write a test that uses the cassette
+Also record a v2 version:
+
+```bash
+agent-vcr record \
+  --transport stdio \
+  --server-command "python demo/servers/calculator_v2.py" \
+  -o cassettes/golden-v2.vcr
+# Send the same requests, plus try divide, then Ctrl+C
+```
+
+### Step 4.2 — Write golden cassette tests
 
 Create a file `tests/test_golden.py`:
 
@@ -270,7 +280,7 @@ Create a file `tests/test_golden.py`:
 import pytest
 
 
-@pytest.mark.vcr("cassettes/golden.vcr")
+@pytest.mark.vcr("cassettes/golden-v1.vcr")
 def test_tools_list_returns_tools(vcr_replayer):
     """Golden test: tools/list must return add and multiply."""
     response = vcr_replayer.handle_request({
@@ -285,7 +295,7 @@ def test_tools_list_returns_tools(vcr_replayer):
     assert "multiply" in tool_names
 
 
-@pytest.mark.vcr("cassettes/golden.vcr")
+@pytest.mark.vcr("cassettes/golden-v1.vcr")
 def test_add_returns_correct_result(vcr_replayer):
     """Golden test: add(15, 27) must return 42."""
     response = vcr_replayer.handle_request({
@@ -297,7 +307,16 @@ def test_add_returns_correct_result(vcr_replayer):
     assert response["result"]["content"][0]["text"] == "42"
 ```
 
-### Step 4.3 — Run the test
+### Step 4.3 — Use `validate` to ensure cassettes are consistent
+
+```bash
+agent-vcr validate cassettes/golden-v1.vcr
+agent-vcr validate cassettes/golden-v2.vcr
+```
+
+These commands verify the structure and completeness of your cassettes.
+
+### Step 4.4 — Run the golden tests
 
 ```bash
 cd python
@@ -305,42 +324,21 @@ pytest tests/test_golden.py -v
 cd ..
 ```
 
-The test runs against the recorded data — no live server needed. Commit `cassettes/golden.vcr` to your repo so CI replays it on every push.
+The test runs against the recorded data — no live server needed. Commit `cassettes/golden-v*.vcr` to your repo.
 
-### Step 4.4 — What happens when code breaks?
+### Step 4.5 — Gate deploys with compatibility checks
 
-Edit `test_golden.py` to expect a different result (e.g., change `"42"` to `"43"`). Run `pytest` again — it fails immediately, catching the regression.
-
-**What you learned:** Golden cassettes let you freeze a known-good interaction and replay it in CI forever.
-
----
-
-## Lab 5: MCP Server Compatibility Gates (Use Case #2)
-
-**Goal:** Block deploys when a server update introduces breaking changes.
-
-### Step 5.1 — Record both versions
+Use the `--fail-on-breaking` flag to block incompatible server updates:
 
 ```bash
-# Record v1 baseline
-agent-vcr record \
-  --transport stdio \
-  --server-command "python demo/servers/calculator_v1.py" \
-  -o v1-baseline.vcr
-# Send: initialize, tools/list, tools/call(add), tools/call(multiply), then Ctrl+C
-
-# Record v2 candidate
+# Record a candidate version and check compatibility
 agent-vcr record \
   --transport stdio \
   --server-command "python demo/servers/calculator_v2.py" \
   -o v2-candidate.vcr
-# Send the SAME requests, plus try divide, then Ctrl+C
-```
 
-### Step 5.2 — Gate the deploy
-
-```bash
-agent-vcr diff v1-baseline.vcr v2-candidate.vcr --fail-on-breaking
+# Check if v2 breaks backward compatibility
+agent-vcr diff cassettes/golden-v1.vcr v2-candidate.vcr --fail-on-breaking
 echo "Exit code: $?"
 ```
 
@@ -348,24 +346,24 @@ If v2 only adds things (new tools, extra fields), the diff says **COMPATIBLE** a
 
 If v2 removed a tool or changed an existing response type, the diff says **BREAKING** and exits with code 1. The deploy is blocked.
 
-### Step 5.3 — Add this to your CI
+### Step 4.6 — Add this to your CI
 
 ```yaml
 # .github/workflows/compatibility.yml
 - name: Check MCP compatibility
   run: |
-    agent-vcr diff cassettes/baseline.vcr cassettes/current.vcr --fail-on-breaking
+    agent-vcr diff cassettes/golden-v1.vcr cassettes/current.vcr --fail-on-breaking
 ```
 
-**What you learned:** `--fail-on-breaking` makes Agent VCR a CI gate that blocks incompatible server updates.
+**What you learned:** Golden cassettes freeze known-good interactions. Use them for regression tests and as CI gates to block incompatible server updates.
 
 ---
 
-## Lab 6: Error Injection for Resilience Testing (Use Case #3)
+## Lab 5: Error Injection & Offline Development (Use Cases #3 & #4)
 
-**Goal:** Simulate server errors without modifying the server.
+**Goal:** Simulate server errors and offline scenarios for resilient development and testing.
 
-### Step 6.1 — Create a test with error injection
+### Step 5.1 — Create a test with error injection
 
 Create a file `tests/test_error_injection.py`:
 
@@ -425,7 +423,7 @@ def test_handles_timeout_simulation():
     assert response["error"]["message"] == "Division by zero"
 ```
 
-### Step 6.2 — Run the error injection tests
+### Step 5.2 — Run the error injection tests
 
 ```bash
 cd python
@@ -433,7 +431,7 @@ pytest tests/test_error_injection.py -v
 cd ..
 ```
 
-### Step 6.3 — Use the pre-built error recording
+### Step 5.3 — Use the pre-built error recording
 
 ```bash
 agent-vcr inspect examples/recordings/calculator-errors.vcr
@@ -441,17 +439,12 @@ agent-vcr inspect examples/recordings/calculator-errors.vcr
 
 You'll see the recorded errors: division by zero and method not found.
 
-**What you learned:** You can inject arbitrary errors into recorded responses to test error handling paths without touching the real server.
+### Step 5.4 — Offline development workflow
 
----
-
-## Lab 7: Offline Development (Use Case #4)
-
-**Goal:** Record a session while online, then develop against the replay while offline.
-
-### Step 7.1 — Record while you have a server
+Record a session while online, then develop against it while offline:
 
 ```bash
+# Record while you have a server
 agent-vcr record \
   --transport stdio \
   --server-command "python demo/servers/calculator_v1.py" \
@@ -460,7 +453,7 @@ agent-vcr record \
 
 Send all the requests your client needs, then `Ctrl+C`.
 
-### Step 7.2 — Go offline and replay
+### Step 5.5 — Replay offline
 
 ```bash
 # Kill the real server, disconnect from the network — doesn't matter
@@ -471,7 +464,7 @@ agent-vcr replay \
 
 Your client can now develop against the mock as if the real server were running.
 
-### Step 7.3 — SSE variant (for web-based MCP servers)
+### Step 5.6 — SSE variant (for web-based MCP servers)
 
 If your server uses HTTP+SSE instead of stdio:
 
@@ -485,15 +478,15 @@ agent-vcr replay --file sse-session.vcr --transport sse --port 3100
 
 Now point your client to `http://localhost:3100/sse` and it works offline.
 
-**What you learned:** Record once while connected, then develop indefinitely against the replay — on a plane, on bad WiFi, wherever.
+**What you learned:** You can inject arbitrary errors to test error handling, and record sessions for offline development — on a plane, on bad WiFi, or anywhere.
 
 ---
 
-## Lab 8: Multi-Agent Regression Testing (Use Case #5)
+## Lab 6: Multi-Agent Regression Testing (Use Case #5)
 
 **Goal:** When multiple AI agents share MCP infrastructure, one team's server change can break another team's agent. Each team maintains their own cassettes and runs compatibility checks independently.
 
-### Step 8.1 — Set up per-team cassette directories
+### Step 6.1 — Set up per-team cassette directories
 
 Imagine two teams: **Team Search** (builds a search agent) and **Team Writer** (builds a writing agent). Both use the same calculator MCP server.
 
@@ -502,7 +495,7 @@ mkdir -p cassettes/team-search
 mkdir -p cassettes/team-writer
 ```
 
-### Step 8.2 — Each team records their own golden cassettes
+### Step 6.2 — Each team records their own golden cassettes
 
 **Team Search** records what they care about (tools/list + add):
 
@@ -524,7 +517,7 @@ agent-vcr record \
 # Send: initialize, tools/list, tools/call(multiply), then Ctrl+C
 ```
 
-### Step 8.3 — Server team releases v2
+### Step 6.3 — Server team releases v2
 
 The server team records against v2:
 
@@ -536,7 +529,7 @@ agent-vcr record \
 # Send all known operations, then Ctrl+C
 ```
 
-### Step 8.4 — Each team independently checks compatibility
+### Step 6.4 — Each team independently checks compatibility
 
 ```bash
 # Team Search checks: will v2 break our agent?
@@ -550,7 +543,7 @@ echo "Team Writer: exit code $?"
 
 Both should pass (v2 only adds features). But if v2 had *removed* the multiply tool, Team Writer's check would fail while Team Search's would pass — catching the issue before deploy.
 
-### Step 8.5 — Automate with CI
+### Step 6.5 — Automate with CI
 
 Each team adds their own compatibility check to their CI:
 
@@ -564,79 +557,11 @@ Each team adds their own compatibility check to their CI:
 
 ---
 
-## Lab 9: Protocol Evolution Tracking (Use Case #6)
+## Lab 7: Programmatic Recording & Protocol Evolution (Use Cases #6 & #7)
 
+**Goal:** Build recordings from code and track how your server's behavior changes across versions.
 
-**Goal:** Track how your server's behavior changes as the MCP spec evolves.
-
-### Step 9.1 — Create a tracking script
-
-Create a file `track_evolution.py`:
-
-```python
-"""Track how the calculator server evolves across versions."""
-from agent_vcr.diff import MCPDiff
-
-
-def track():
-    result = MCPDiff.compare(
-        "examples/recordings/calculator-v1.vcr",
-        "examples/recordings/calculator-v2.vcr"
-    )
-
-    print("=== Protocol Evolution Report ===\n")
-
-    if result.is_identical:
-        print("No changes between versions.")
-        return
-
-    print(f"Added interactions:    {len(result.added_interactions)}")
-    print(f"Removed interactions:  {len(result.removed_interactions)}")
-    print(f"Modified interactions: {len(result.modified_interactions)}")
-    print(f"Breaking changes:      {len(result.breaking_changes)}")
-    print()
-
-    if result.is_compatible:
-        print("Verdict: COMPATIBLE — safe to upgrade")
-    else:
-        print("Verdict: BREAKING — review changes before upgrading")
-        print("\nBreaking changes:")
-        for change in result.breaking_changes:
-            print(f"  - {change}")
-
-
-if __name__ == "__main__":
-    track()
-```
-
-### Step 9.2 — Run it
-
-```bash
-python track_evolution.py
-```
-
-### Step 9.3 — Build a version history
-
-Over time, you record each server version:
-
-```bash
-agent-vcr record --transport stdio --server-command "python demo/servers/calculator_v1.py" -o versions/v1.0.vcr
-agent-vcr record --transport stdio --server-command "python demo/servers/calculator_v2.py" -o versions/v2.0.vcr
-# (add more versions as your server evolves)
-
-# Compare any two
-agent-vcr diff versions/v1.0.vcr versions/v2.0.vcr
-```
-
-**What you learned:** By recording each server version, you build a version history you can diff at any point to understand exactly what changed.
-
----
-
-## Lab 10: Programmatic Recording (No Live Server)
-
-**Goal:** Build recordings from code — useful for testing without a real server at all.
-
-### Step 10.1 — Run the included example
+### Step 7.1 — Run the included example
 
 ```bash
 cd python
@@ -650,14 +575,14 @@ Or run the example script directly:
 python examples/python/create_sample_recording.py programmatic-sample.vcr
 ```
 
-### Step 10.2 — Inspect and replay it
+### Step 7.2 — Inspect and replay it
 
 ```bash
 agent-vcr inspect programmatic-sample.vcr
 agent-vcr replay --file programmatic-sample.vcr --transport stdio
 ```
 
-### Step 10.3 — Build your own recording
+### Step 7.3 — Build your own recording
 
 ```python
 from datetime import datetime
@@ -706,15 +631,78 @@ recording.save("my-custom.vcr")
 print("Saved my-custom.vcr!")
 ```
 
-**What you learned:** You can build recordings entirely in code, which is useful for creating fixtures without needing any server at all.
+### Step 7.4 — Create a tracking script for protocol evolution
+
+Create a file `track_evolution.py`:
+
+```python
+"""Track how the calculator server evolves across versions."""
+from agent_vcr.diff import MCPDiff
+
+
+def track():
+    result = MCPDiff.compare(
+        "examples/recordings/calculator-v1.vcr",
+        "examples/recordings/calculator-v2.vcr"
+    )
+
+    print("=== Protocol Evolution Report ===\n")
+
+    if result.is_identical:
+        print("No changes between versions.")
+        return
+
+    print(f"Added interactions:    {len(result.added_interactions)}")
+    print(f"Removed interactions:  {len(result.removed_interactions)}")
+    print(f"Modified interactions: {len(result.modified_interactions)}")
+    print(f"Breaking changes:      {len(result.breaking_changes)}")
+    print()
+
+    if result.is_compatible:
+        print("Verdict: COMPATIBLE — safe to upgrade")
+    else:
+        print("Verdict: BREAKING — review changes before upgrading")
+        print("\nBreaking changes:")
+        for change in result.breaking_changes:
+            print(f"  - {change}")
+
+
+if __name__ == "__main__":
+    track()
+```
+
+### Step 7.5 — Run it
+
+```bash
+python track_evolution.py
+```
+
+### Step 7.6 — Build a version history
+
+Over time, record each server version and use `stats` to track changes:
+
+```bash
+agent-vcr record --transport stdio --server-command "python demo/servers/calculator_v1.py" -o versions/v1.0.vcr
+agent-vcr record --transport stdio --server-command "python demo/servers/calculator_v2.py" -o versions/v2.0.vcr
+# (add more versions as your server evolves)
+
+# Get statistics on a cassette
+agent-vcr stats versions/v1.0.vcr
+agent-vcr stats versions/v2.0.vcr
+
+# Compare any two versions
+agent-vcr diff versions/v1.0.vcr versions/v2.0.vcr
+```
+
+**What you learned:** You can build recordings entirely in code and track version history by recording each server iteration. Use `stats` to understand cassette composition and `diff` to spot changes.
 
 ---
 
-## Lab 11: Pytest Integration
+## Lab 8: Pytest Integration
 
 **Goal:** Use Agent VCR fixtures and markers in your test suite.
 
-### Step 11.1 — The `@pytest.mark.vcr` marker
+### Step 8.1 — The `@pytest.mark.vcr` marker
 
 ```python
 # tests/test_with_marker.py
@@ -733,7 +721,7 @@ def test_tools_list(vcr_replayer):
     assert len(tools) == 2
 ```
 
-### Step 11.2 — The async context manager
+### Step 8.2 — The async context manager
 
 ```python
 # tests/test_async.py
@@ -751,7 +739,7 @@ async def test_with_cassette():
         assert response["result"]["content"][0]["text"] == "42"
 ```
 
-### Step 11.3 — Recording in test mode
+### Step 8.3 — Recording in test mode
 
 ```bash
 # Run tests in record mode (creates cassettes from live server)
@@ -763,7 +751,7 @@ pytest tests/ --vcr-dir=my_cassettes
 cd ..
 ```
 
-### Step 11.4 — Match strategies
+### Step 8.4 — Match strategies
 
 Try different matching strategies to see how they affect replay:
 
@@ -782,65 +770,14 @@ loose = MCPReplayer(recording, match_strategy="method")
 # Ordered: return responses in sequence regardless of request
 sequential = MCPReplayer(recording, match_strategy="sequential")
 
-# Fuzzy: match method + subset of params
-fuzzy = MCPReplayer(recording, match_strategy="fuzzy")
+# Subset: match method + subset of params (fuzzy is deprecated alias)
+subset = MCPReplayer(recording, match_strategy="subset")
 
 # Exact: full JSON deep-equal (strictest)
 exact = MCPReplayer(recording, match_strategy="exact")
 ```
 
-**What you learned:** Agent VCR integrates directly with pytest. Choose the match strategy that fits your testing needs — strict for golden tests, fuzzy for flexible integration tests.
-
----
-
-## Lab 12: Recording the Demo with asciinema
-
-**Goal:** Create a terminal recording you can embed in the README.
-
-### Step 12.1 — Install asciinema
-
-```bash
-brew install asciinema        # macOS
-# pip install asciinema       # or via pip
-```
-
-### Step 12.2 — Option A: Upload the pre-built recording
-
-We've included a handcrafted `.cast` file in the repo:
-
-```bash
-asciinema upload demo/agent-vcr-demo.cast
-```
-
-It prints a URL — that's your embed link.
-
-### Step 12.3 — Option B: Record a live session
-
-```bash
-asciinema rec demo/my-live-demo.cast -c "bash demo/record-demo.sh"
-```
-
-Preview it locally:
-
-```bash
-asciinema play demo/my-live-demo.cast
-```
-
-Then upload:
-
-```bash
-asciinema upload demo/my-live-demo.cast
-```
-
-### Step 12.4 — Update the README
-
-Replace `DEMO_ID` in `README.md` with the ID from the asciinema URL:
-
-```markdown
-[![Agent VCR Demo](https://asciinema.org/a/YOUR_ID.svg)](https://asciinema.org/a/YOUR_ID)
-```
-
-**What you learned:** A live terminal demo is worth a thousand words in a README.
+**What you learned:** Agent VCR integrates directly with pytest. Choose the match strategy that fits your testing needs — strict for golden tests, subset for flexible integration tests.
 
 ---
 
@@ -855,6 +792,9 @@ Replace `DEMO_ID` in `README.md` with the ID from the asciinema URL:
 | `agent-vcr inspect FILE` | Show recording details |
 | `agent-vcr inspect FILE --format table` | Table view |
 | `agent-vcr inspect FILE --format json` | Raw JSON output |
+| `agent-vcr validate FILE` | Verify cassette structure |
+| `agent-vcr merge FILE1 FILE2 -o OUTPUT` | Merge two recordings |
+| `agent-vcr stats FILE` | Show cassette statistics |
 
 ## File Inventory
 
@@ -864,8 +804,8 @@ Replace `DEMO_ID` in `README.md` with the ID from the asciinema URL:
 | `demo/servers/calculator_v2.py` | Demo MCP server v2 (adds divide, metadata) |
 | `demo/record-demo.sh` | Script for recording the asciinema demo |
 | `demo/agent-vcr-demo.cast` | Pre-built asciinema recording |
-| `demo/README-GIFS.md` | How to create GIFs for all 12 labs (asciinema + agg) |
-| `demo/make-lab-gifs.sh` | Run per-lab commands for asciinema → GIF (usage: `bash demo/make-lab-gifs.sh <1-12>`) |
+| `demo/README-GIFS.md` | How to create GIFs for the labs (asciinema + agg) |
+| `demo/make-lab-gifs.sh` | Run per-lab commands for asciinema → GIF (usage: `bash demo/make-lab-gifs.sh <1-8>`) |
 | `examples/recordings/calculator-v1.vcr` | Sample cassette — v1 session |
 | `examples/recordings/calculator-v2.vcr` | Sample cassette — v2 session |
 | `examples/recordings/calculator-errors.vcr` | Sample cassette — error scenarios |

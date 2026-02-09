@@ -37,7 +37,8 @@ See [typescript/README.md](typescript/README.md) for full TypeScript usage and A
 
 **High-impact areas:**
 
-- **TypeScript tests** — The `typescript/` directory has unit tests (Vitest). Adding integration tests and more coverage is welcome.
+- **TypeScript integration tests** — The `typescript/` directory has 72 unit tests in `tests/unit/`. Adding Jest/Vitest integration tests and recording mode support is welcome.
+- **Recording mode in test integrations** — Jest and Vitest plugins currently support replay mode only. Adding record mode would complete the TypeScript feature parity with Python.
 - **More matching strategies** — Custom matchers, regex-based param matching, response template interpolation.
 - **Transport plugins** — WebSocket transport, HTTP/2, custom protocol adapters.
 - **Real-world cassettes** — Example `.vcr` recordings from popular MCP servers (filesystem, GitHub, Slack, etc.) for the test suite.
