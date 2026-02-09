@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent VCR — Architecture Diagram</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0f172a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  .canvas {
+    width: 1200px;
+    height: 630px;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Subtle grid background */
+  .canvas::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(99, 102, 241, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(99, 102, 241, 0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* Glow effects */
+  .glow-1 {
+    position: absolute;
+    width: 400px;
+    height: 400px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+    top: -100px;
+    left: -100px;
+  }
+  .glow-2 {
+    position: absolute;
+    width: 350px;
+    height: 350px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.12) 0%, transparent 70%);
+    bottom: -80px;
+    right: -80px;
+  }
+
+  /* Title area */
+  .title-area {
+    position: absolute;
+    top: 32px;
+    left: 48px;
+    z-index: 10;
+  }
+  .title-area h1 {
+    font-size: 36px;
+    font-weight: 800;
+    color: #f8fafc;
+    letter-spacing: -0.5px;
+  }
+  .title-area h1 span {
+    background: linear-gradient(135deg, #818cf8, #6366f1);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .title-area .tagline {
+    font-size: 15px;
+    color: #94a3b8;
+    margin-top: 6px;
+    font-weight: 400;
+  }
+
+  /* Badges */
+  .badges {
+    position: absolute;
+    top: 40px;
+    right: 48px;
+    display: flex;
+    gap: 10px;
+    z-index: 10;
+  }
+  .badge {
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  .badge-pypi {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+  }
+  .badge-npm {
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+  }
+  .badge-mit {
+    background: rgba(234, 179, 8, 0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(234, 179, 8, 0.25);
+  }
+
+  /* Diagram container */
+  .diagram {
+    position: absolute;
+    top: 120px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding-bottom: 30px;
+  }
+
+  /* Flow rows */
+  .flow-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    position: relative;
+  }
+
+  .flow-row.record { margin-bottom: 50px; }
+
+  /* Nodes */
+  .node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 16px;
+    padding: 18px 28px;
+    position: relative;
+    min-width: 140px;
+  }
+
+  .node-icon {
+    font-size: 28px;
+    margin-bottom: 8px;
+  }
+
+  .node-label {
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .node-sublabel {
+    font-size: 11px;
+    margin-top: 3px;
+    opacity: 0.7;
+  }
+
+  /* Client node */
+  .node-client {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(99, 102, 241, 0.08));
+    border: 1.5px solid rgba(99, 102, 241, 0.4);
+    color: #c7d2fe;
+  }
+
+  /* Agent VCR node */
+  .node-vcr {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.08));
+    border: 1.5px solid rgba(16, 185, 129, 0.5);
+    color: #a7f3d0;
+    min-width: 180px;
+    padding: 20px 32px;
+  }
+  .node-vcr .node-label { color: #6ee7b7; font-size: 16px; }
+
+  /* Server node */
+  .node-server {
+    background: linear-gradient(135deg, rgba(251, 146, 60, 0.2), rgba(251, 146, 60, 0.08));
+    border: 1.5px solid rgba(251, 146, 60, 0.4);
+    color: #fed7aa;
+  }
+
+  /* Cassette node */
+  .node-cassette {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(168, 85, 247, 0.08));
+    border: 1.5px solid rgba(168, 85, 247, 0.4);
+    color: #d8b4fe;
+    min-width: 160px;
+  }
+
+  /* Mock node */
+  .node-mock {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05));
+    border: 1.5px dashed rgba(16, 185, 129, 0.5);
+    color: #a7f3d0;
+    min-width: 180px;
+    padding: 20px 32px;
+  }
+  .node-mock .node-label { color: #6ee7b7; }
+
+  /* Diff node */
+  .node-diff {
+    background: linear-gradient(135deg, rgba(244, 63, 94, 0.2), rgba(244, 63, 94, 0.08));
+    border: 1.5px solid rgba(244, 63, 94, 0.4);
+    color: #fda4af;
+    min-width: 160px;
+  }
+
+  /* Arrows */
+  .arrow {
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    position: relative;
+  }
+  .arrow-line {
+    width: 60px;
+    height: 2px;
+    position: relative;
+  }
+  .arrow-line::after {
+    content: '';
+    position: absolute;
+    right: -1px;
+    top: -5px;
+    border: 6px solid transparent;
+  }
+
+  .arrow-bidir .arrow-line {
+    background: linear-gradient(90deg, #818cf8, #6ee7b7);
+  }
+  .arrow-bidir .arrow-line::after {
+    border-left-color: #6ee7b7;
+  }
+
+  .arrow-right .arrow-line {
+    background: linear-gradient(90deg, #6ee7b7, #fb923c);
+  }
+  .arrow-right .arrow-line::after {
+    border-left-color: #fb923c;
+  }
+
+  .arrow-down {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 0;
+  }
+  .arrow-down .arrow-vline {
+    width: 2px;
+    height: 30px;
+    background: linear-gradient(180deg, #6ee7b7, #a78bfa);
+  }
+  .arrow-down .arrow-vline::after {
+    content: '';
+    display: block;
+    margin-left: -5px;
+    border: 6px solid transparent;
+    border-top-color: #a78bfa;
+  }
+
+  .arrow-replay .arrow-line {
+    background: linear-gradient(90deg, #a78bfa, #6ee7b7);
+    width: 100px;
+  }
+  .arrow-replay .arrow-line::after {
+    border-left-color: #6ee7b7;
+  }
+
+  .arrow-replay-left .arrow-line {
+    background: linear-gradient(90deg, #6ee7b7, #818cf8);
+    width: 60px;
+  }
+  .arrow-replay-left .arrow-line::after {
+    border-left-color: #818cf8;
+  }
+
+  .arrow-diff .arrow-line {
+    background: linear-gradient(90deg, #a78bfa, #fb7185);
+    width: 60px;
+  }
+  .arrow-diff .arrow-line::after {
+    border-left-color: #fb7185;
+  }
+
+  /* Labels on arrows */
+  .arrow-label {
+    position: absolute;
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: #64748b;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    white-space: nowrap;
+  }
+
+  /* Row labels */
+  .row-label {
+    position: absolute;
+    left: -120px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    padding: 6px 16px;
+    border-radius: 8px;
+  }
+  .row-label-record {
+    color: #6ee7b7;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+  .row-label-replay {
+    color: #818cf8;
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+  }
+  .row-label-diff {
+    color: #fb7185;
+    background: rgba(244, 63, 94, 0.1);
+    border: 1px solid rgba(244, 63, 94, 0.2);
+  }
+
+  /* Phase labels */
+  .phase-container {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    margin-bottom: 16px;
+  }
+  .phase-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    padding: 4px 14px;
+    border-radius: 6px;
+    flex-shrink: 0;
+  }
+  .phase-record {
+    color: #6ee7b7;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+  }
+  .phase-replay {
+    color: #818cf8;
+    background: rgba(99, 102, 241, 0.12);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+  }
+  .phase-diff {
+    color: #fb7185;
+    background: rgba(244, 63, 94, 0.12);
+    border: 1px solid rgba(244, 63, 94, 0.25);
+  }
+
+  /* Connector between rows */
+  .connector-down {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 12px 0;
+  }
+  .connector-line {
+    width: 2px;
+    height: 20px;
+    background: rgba(168, 85, 247, 0.4);
+  }
+
+  /* Bottom bar */
+  .bottom-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #6366f1, #10b981, #f43f5e, #a855f7);
+  }
+</style>
+</head>
+<body>
+<div class="canvas">
+  <div class="glow-1"></div>
+  <div class="glow-2"></div>
+
+  <!-- Title -->
+  <div class="title-area">
+    <h1><span>Agent VCR</span></h1>
+    <div class="tagline">Record, Replay, and Diff MCP Interactions</div>
+  </div>
+
+  <!-- Badges -->
+  <div class="badges">
+    <span class="badge badge-pypi">PyPI</span>
+    <span class="badge badge-npm">npm</span>
+    <span class="badge badge-mit">MIT</span>
+  </div>
+
+  <!-- Diagram -->
+  <div class="diagram">
+
+    <!-- RECORD ROW -->
+    <div class="phase-container">
+      <span class="phase-label phase-record">1 &middot; Record</span>
+      <div class="flow-row">
+        <div class="node node-client">
+          <div class="node-icon">🤖</div>
+          <div class="node-label">MCP Client</div>
+          <div class="node-sublabel">AI Agent</div>
+        </div>
+
+        <div class="arrow arrow-bidir">
+          <div class="arrow-label">JSON-RPC</div>
+          <div class="arrow-line"></div>
+        </div>
+
+        <div class="node node-vcr">
+          <div class="node-icon">⏺️</div>
+          <div class="node-label">Agent VCR</div>
+          <div class="node-sublabel">Transparent Proxy</div>
+        </div>
+
+        <div class="arrow arrow-right">
+          <div class="arrow-label">stdio / SSE</div>
+          <div class="arrow-line"></div>
+        </div>
+
+        <div class="node node-server">
+          <div class="node-icon">⚙️</div>
+          <div class="node-label">MCP Server</div>
+          <div class="node-sublabel">Real Server</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Down connector + cassette -->
+    <div class="connector-down">
+      <div style="display:flex; align-items:center; gap: 14px;">
+        <div class="connector-line"></div>
+      </div>
+      <div class="node node-cassette" style="margin-top: 4px; padding: 12px 24px;">
+        <div style="display:flex; align-items:center; gap: 10px;">
+          <span style="font-size:22px;">📼</span>
+          <div>
+            <div class="node-label" style="font-size: 13px;">session.vcr</div>
+            <div class="node-sublabel">Golden Cassette</div>
+          </div>
+        </div>
+      </div>
+      <div class="connector-line"></div>
+    </div>
+
+    <!-- REPLAY + DIFF ROW -->
+    <div style="display: flex; gap: 60px; align-items: flex-start;">
+      <!-- Replay -->
+      <div class="phase-container" style="flex-direction: column; align-items: center;">
+        <span class="phase-label phase-replay">2 &middot; Replay</span>
+        <div class="flow-row" style="margin-top: 10px;">
+          <div class="node node-client" style="padding: 14px 20px; min-width: 110px;">
+            <div class="node-icon" style="font-size: 22px;">🤖</div>
+            <div class="node-label" style="font-size: 12px;">Client</div>
+          </div>
+          <div class="arrow arrow-replay-left">
+            <div class="arrow-line"></div>
+          </div>
+          <div class="node node-mock" style="padding: 14px 20px; min-width: 140px;">
+            <div class="node-icon" style="font-size: 22px;">▶️</div>
+            <div class="node-label" style="font-size: 13px;">Mock Server</div>
+            <div class="node-sublabel">Deterministic</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Diff -->
+      <div class="phase-container" style="flex-direction: column; align-items: center;">
+        <span class="phase-label phase-diff">3 &middot; Diff</span>
+        <div class="flow-row" style="margin-top: 10px;">
+          <div class="node node-cassette" style="padding: 14px 18px; min-width: 100px;">
+            <div class="node-icon" style="font-size: 20px;">📼</div>
+            <div class="node-label" style="font-size: 11px;">v1.vcr</div>
+          </div>
+          <div class="arrow arrow-diff">
+            <div class="arrow-line"></div>
+          </div>
+          <div class="node node-diff" style="padding: 14px 20px; min-width: 130px;">
+            <div class="node-icon" style="font-size: 22px;">🔍</div>
+            <div class="node-label" style="font-size: 13px;">Breaking?</div>
+            <div class="node-sublabel">Field-level check</div>
+          </div>
+          <div class="arrow arrow-diff" style="transform: scaleX(-1);">
+            <div class="arrow-line"></div>
+          </div>
+          <div class="node node-cassette" style="padding: 14px 18px; min-width: 100px;">
+            <div class="node-icon" style="font-size: 20px;">📼</div>
+            <div class="node-label" style="font-size: 11px;">v2.vcr</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-bar"></div>
+</div>
+</body>
+</html>

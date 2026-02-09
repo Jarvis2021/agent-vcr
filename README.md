@@ -1,5 +1,7 @@
 # Agent VCR
 
+> **🚀 Now available on [PyPI](https://pypi.org/project/agent-vcr/) and [npm](https://www.npmjs.com/package/@agent-vcr/core)!** Install with `pip install agent-vcr` or `npm install @agent-vcr/core`.
+
 **Record, replay, and diff MCP interactions — like VCR for AI agents.**
 
 Test MCP servers and clients without flaky live servers. **Mock MCP for testing**: record once, replay forever. No more "MCP server was down" or "rate limit" in CI — deterministic, fast, offline.
@@ -15,7 +17,7 @@ Test MCP servers and clients without flaky live servers. **Mock MCP for testing*
 
 Agent VCR is a testing framework for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io). It transparently records all JSON-RPC 2.0 interactions between an MCP client and server, then replays them deterministically — no real server needed. **Easier than rolling your own mocks:** one install, one command to record, one to replay. Golden cassettes in seconds.
 
-**Python and TypeScript are first-class.** The Python implementation has 190+ tests and a full CLI; the TypeScript implementation has 72 unit tests, full CLI, and is **npm-ready** (`@agent-vcr/core`) — ideal for the TypeScript-first MCP ecosystem, where most MCP servers and clients live. Recordings are cross-language: record with Python, replay with TypeScript (or the other way around). See [typescript/README.md](typescript/README.md).
+**Python and TypeScript are first-class.** The Python implementation has 250+ tests and a full CLI; the TypeScript implementation has 72 unit tests, full CLI, and ships as `@agent-vcr/core` on npm — ideal for the TypeScript-first MCP ecosystem, where most MCP servers and clients live. Recordings are cross-language: record with Python, replay with TypeScript (or the other way around). See [typescript/README.md](typescript/README.md).
 
 
 ## The Problem
@@ -126,7 +128,7 @@ print(f"Breaking changes: {len(result.breaking_changes)}")
 
 ## Quick Start
 
-> **New to Agent VCR?** Follow the [hands-on tutorial](docs/tutorial.md) — 12 labs covering every use case with real commands.
+> **New to Agent VCR?** Follow the [hands-on tutorial](docs/tutorial.md) — 8 hands-on labs covering every use case with real commands.
 
 ### Installation
 
@@ -190,6 +192,19 @@ agent-vcr search index.json --endpoint-id github
 ```bash
 # pairs.json: {"pairs": [{"baseline": "v1.vcr", "current": "v2.vcr"}, ...]}
 agent-vcr diff-batch pairs.json --fail-on-breaking
+```
+
+### Validate, merge, and analyze
+
+```bash
+# Validate a recording's schema and structure
+agent-vcr validate session.vcr
+
+# Merge multiple recordings into one
+agent-vcr merge session1.vcr session2.vcr -o combined.vcr --deduplicate
+
+# Show statistics (method distribution, latency percentiles, error rate)
+agent-vcr stats session.vcr
 ```
 
 ### Inspect a recording
@@ -423,12 +438,12 @@ Recordings use a JSON-based `.vcr` format:
 
 ## Python vs TypeScript
 
-The Python implementation is **complete and tested** (190 tests). The TypeScript/Node.js port mirrors the same architecture and has a **full unit test suite** (72 tests).
+The Python implementation is **complete and tested** (250+ tests). The TypeScript/Node.js port mirrors the same architecture and has a **full unit test suite** (72 tests).
 
 | Aspect | Python | TypeScript |
 |--------|--------|------------|
 | Status | Production-ready | 72 unit tests, source complete |
-| Tests | 190 tests passing | 72 unit tests in `tests/unit/` |
+| Tests | 250+ tests passing | 72 unit tests in `tests/unit/` |
 | CLI | Fully functional | Fully functional |
 | Test framework | pytest plugin | Jest/Vitest (replay mode) |
 | Recording format | `.vcr` (JSON) | `.vcr` (JSON) — same format |
