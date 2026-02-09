@@ -139,9 +139,9 @@ class MCPRecorder:
             client_stdin_fd: Optional fd to read client input from (stdio only, for --demo).
             pending_timeout_seconds: Evict pending requests with no response after this many seconds (0 = disable).
             max_interactions: Stop recording after this many interactions (0 = unlimited).
-            session_id: Optional unique id for this session (multi-session / SCALING.md).
-            endpoint_id: Optional logical endpoint id for routing (multi-MCP / SCALING.md).
-            agent_id: Optional agent/client id (agent-to-agent / SCALING.md).
+            session_id: Optional unique id for this session (multi-session; see docs/scaling.md).
+            endpoint_id: Optional logical endpoint id for routing (multi-MCP; see docs/scaling.md).
+            agent_id: Optional agent/client id (agent-to-agent; see docs/scaling.md).
 
         Raises:
             ValueError: If required parameters for transport type are missing
@@ -182,6 +182,9 @@ class MCPRecorder:
         # Request/response tracking
         self._pending_requests: dict[int | str, JSONRPCRequest] = {}  # id -> request object
         self._pending_request_times: dict[int | str, float] = {}  # id -> timestamp
+
+        # Notification buffer: collect server notifications between request/response pairs
+        self._notification_buffer: list[JSONRPCNotification] = []
 
         # Recording state
         self._is_recording = False
@@ -344,17 +347,17 @@ class MCPRecorder:
             msg_id = message.get("id")
             method = message.get("method")
 
-            # Skip if filtering and method not included
-            if self.filter_methods and method and method not in self.filter_methods:
-                logger.debug(f"Filtering out client message: {method}")
-                return message
-
             # Parse as JSONRPCRequest
             request_obj = self._parse_jsonrpc_request(message)
             if not request_obj:
                 return message
 
-            # Track request and timing
+            # Skip recording (but still forward) if filtering and method not included
+            if self.filter_methods and method and method not in self.filter_methods:
+                logger.debug(f"Filtering out client message: {method}")
+                return message
+
+            # Track request and timing (only for methods we're recording)
             if msg_id is not None:
                 with self._lock:
                     self._pending_requests[msg_id] = request_obj
@@ -375,7 +378,8 @@ class MCPRecorder:
         """Handle message from server to client.
 
         Captures the message and pairs it with the corresponding request,
-        then records the interaction.
+        then records the interaction. Server notifications are buffered and
+        attached to the next request/response interaction.
 
         Args:
             message: JSON-RPC 2.0 message dict
@@ -386,15 +390,25 @@ class MCPRecorder:
         try:
             msg_id = message.get("id")
 
-            # Parse response
+            # Parse response or notification
             response_obj = self._parse_jsonrpc_response(message)
             if not response_obj:
                 return message
 
-            # Pair with pending request
+            # If it's a notification (no id), buffer it for the next interaction
+            if isinstance(response_obj, JSONRPCNotification):
+                with self._lock:
+                    self._notification_buffer.append(response_obj)
+                logger.debug(f"Buffered server notification: {response_obj.method}")
+                return message
+
+            # It's a response — pair with pending request
             with self._lock:
                 request_obj = self._pending_requests.pop(msg_id, None)
                 request_time = self._pending_request_times.pop(msg_id, None)
+                # Drain notification buffer for this interaction
+                buffered_notifications = list(self._notification_buffer)
+                self._notification_buffer.clear()
 
             if request_obj:
                 logger.debug(f"Server response: id={msg_id}")
@@ -423,7 +437,7 @@ class MCPRecorder:
                     )
                     logger.info("Session initialized with initialize handshake")
                 else:
-                    # Record regular interaction (respect max_interactions)
+                    # Record regular interaction with any buffered notifications
                     if self._max_interactions > 0:
                         n = len(self._session_manager.current_recording.session.interactions)
                         if n >= self._max_interactions:
@@ -434,12 +448,18 @@ class MCPRecorder:
                         else:
                             self._session_manager.record_interaction(
                                 request_obj, response_obj,
+                                notifications=buffered_notifications or None,
                                 request_timestamp=request_time,
                             )
                     else:
                         self._session_manager.record_interaction(
                             request_obj, response_obj,
+                            notifications=buffered_notifications or None,
                             request_timestamp=request_time,
+                        )
+                    if buffered_notifications:
+                        logger.debug(
+                            f"Attached {len(buffered_notifications)} notification(s) to interaction id={msg_id}"
                         )
             else:
                 logger.debug(f"Received response for unknown request id={msg_id}")

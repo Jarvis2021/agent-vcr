@@ -118,7 +118,7 @@ print(f"Breaking changes: {len(result.breaking_changes)}")
 
 ## Quick Start
 
-> **New to Agent VCR?** Follow the [hands-on tutorial](TUTORIAL.md) — 12 labs covering every use case with real commands.
+> **New to Agent VCR?** Follow the [hands-on tutorial](docs/tutorial.md) — 12 labs covering every use case with real commands.
 
 ### Installation
 
@@ -401,7 +401,7 @@ The Python implementation is **complete and tested** (190 tests). The TypeScript
 
 ## Scaling (Multi-MCP, Agent-to-Agent)
 
-We support **multi-MCP** and **agent-to-agent**: record multiple sessions (one `.vcr` per client↔server session), tag each with `--session-id`, `--endpoint-id`, and `--agent-id`, and correlate them in your tests or tooling. **Indexing** (`agent-vcr index`, `agent-vcr search`) and **batch diff** (`agent-vcr diff-batch`) let you work across many cassettes. For design and agent-to-agent patterns, see **[SCALING.md](SCALING.md)**.
+We support **multi-MCP** and **agent-to-agent**: record multiple sessions (one `.vcr` per client↔server session), tag each with `--session-id`, `--endpoint-id`, and `--agent-id`, and correlate them in your tests or tooling. **Indexing** (`agent-vcr index`, `agent-vcr search`) and **batch diff** (`agent-vcr diff-batch`) let you work across many cassettes. For design and agent-to-agent patterns, see [docs/scaling.md](docs/scaling.md).
 
 **Example — correlation metadata (record with endpoint/session ids, inspect shows them):**
 
@@ -409,7 +409,7 @@ We support **multi-MCP** and **agent-to-agent**: record multiple sessions (one `
 
 ## Architecture
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design, data flow diagrams, and design decisions.
+See [docs/architecture.md](docs/architecture.md) for the full system design, data flow diagrams, and design decisions.
 
 **Python:**
 ```
@@ -501,7 +501,7 @@ cd python && uv run pytest tests/ -v
 
 ## Contributing
 
-Contributions are welcome! Please see [ARCHITECTURE.md](ARCHITECTURE.md) for system design context and [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are welcome! Please see [docs/architecture.md](docs/architecture.md) for system design context and [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 

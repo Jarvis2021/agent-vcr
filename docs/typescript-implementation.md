@@ -1,6 +1,6 @@
 # TypeScript/Node.js Implementation Summary
 
-This document summarizes the TypeScript implementation of Agent VCR that was added to enable global adoption across the JavaScript/TypeScript ecosystem.
+**For installation, quick start, and API usage**, see [../typescript/README.md](../typescript/README.md). This document is an implementation summary for contributors and maintainers: what was built, status, and how it maps to the Python codebase.
 
 ## Implementation Status: Source Complete, Tests Required
 
@@ -50,8 +50,8 @@ The TypeScript source code mirrors the Python implementation's architecture. **7
 ### Project-Level Updates
 
 - ✅ Updated root `README.md` with TypeScript installation and usage
-- ✅ Updated `ARCHITECTURE.md` to cover both implementations
-- ✅ Created `PUBLISHING.md` with dual-language release guide
+- ✅ Updated [architecture.md](architecture.md) to cover both implementations
+- ✅ Created [publishing.md](publishing.md) with dual-language release guide
 - ✅ All examples show both Python and TypeScript
 
 ## Cross-Language Compatibility (Not Yet Verified)

@@ -106,7 +106,7 @@ def cli() -> None:
 @click.option(
     "--session-id",
     default=None,
-    help="Optional session id for multi-session correlation (see SCALING.md).",
+    help="Optional session id for multi-session correlation (see docs/scaling.md).",
 )
 @click.option(
     "--endpoint-id",
@@ -423,7 +423,7 @@ def _diff_projects(
 )
 @click.option(
     "--match-strategy",
-    type=click.Choice(["method_and_params", "method_only"]),
+    type=click.Choice(["exact", "method", "method_and_params", "fuzzy", "sequential"]),
     default="method_and_params",
     help="Strategy for matching incoming requests to recorded interactions",
 )

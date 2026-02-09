@@ -1,4 +1,4 @@
-"""Index many .vcr files for fast search (SCALING.md Phase 3).
+"""Index many .vcr files for fast search (docs/scaling.md).
 
 Builds a JSON index of path, endpoint_id, agent_id, recorded_at, methods, interaction_count
 so you can search by method, endpoint, agent, or date without loading every file.

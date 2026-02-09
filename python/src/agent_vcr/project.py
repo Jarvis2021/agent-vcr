@@ -1,4 +1,4 @@
-"""Project manifest for multi-session recordings (SCALING.md Phase 2).
+"""Project manifest for multi-session recordings (docs/scaling.md).
 
 A manifest lists multiple .vcr files with endpoint_id (and optional session_id)
 so the replay orchestrator and diff can work on a set of sessions.

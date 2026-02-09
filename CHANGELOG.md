@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replayer (TypeScript): return a JSON-RPC error response when no matching interaction (instead of `null`).
 - **Documentation:** demo/README-GIFS.md (how to create GIFs for all 12 labs with asciinema + agg) and demo/make-lab-gifs.sh (per-lab script for asciinema → GIF). Both tracked in repo (removed from .gitignore).
 - **Documentation:** README, CONTRIBUTING, ARCHITECTURE, and TUTORIAL updated: TypeScript test suite noted; File Inventory includes README-GIFS.md and make-lab-gifs.sh.
-- **Scaling:** [SCALING.md](SCALING.md) added — roadmap for large-scale, multi-MCP, and agent-to-agent. Optional metadata fields `session_id`, `endpoint_id`, `agent_id` (Python + TypeScript format, recorder, CLI `--session-id` / `--endpoint-id` / `--agent-id`).
+- **Scaling:** [docs/scaling.md](docs/scaling.md) added — roadmap for large-scale, multi-MCP, and agent-to-agent. Optional metadata fields `session_id`, `endpoint_id`, `agent_id` (Python + TypeScript format, recorder, CLI `--session-id` / `--endpoint-id` / `--agent-id`).
 
 ## [0.1.0] - 2025-02-08
 

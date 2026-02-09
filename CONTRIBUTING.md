@@ -81,7 +81,7 @@ See [CLAUDE.md](CLAUDE.md) for the full coding conventions, especially the "Crit
 
 ### Architecture Decisions
 
-For significant changes (new transport, new matching strategy, file format changes), please open an issue first to discuss the approach. See [ARCHITECTURE.md](ARCHITECTURE.md) for the system design and known limitations.
+For significant changes (new transport, new matching strategy, file format changes), please open an issue first to discuss the approach. See [docs/architecture.md](docs/architecture.md) for the system design and known limitations.
 
 ## Project Structure
 

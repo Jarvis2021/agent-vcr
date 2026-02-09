@@ -61,7 +61,7 @@ export const VCRMetadataSchema = z.object({
   server_command: z.string().optional(),
   server_args: z.array(z.string()).default([]),
   tags: z.record(z.any()).default({}),
-  // Optional correlation IDs for multi-session / multi-MCP / agent-to-agent (see SCALING.md)
+  // Optional correlation IDs for multi-session / multi-MCP / agent-to-agent (see docs/scaling.md)
   session_id: z.string().optional(),
   endpoint_id: z.string().optional(),
   agent_id: z.string().optional(),

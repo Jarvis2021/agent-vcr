@@ -104,7 +104,7 @@ class VCRMetadata(BaseModel):
     tags: Dict[str, str] = Field(
         default_factory=dict, description="Arbitrary tags for organization"
     )
-    # Optional correlation IDs for multi-session / multi-MCP / agent-to-agent (see SCALING.md)
+    # Optional correlation IDs for multi-session / multi-MCP / agent-to-agent (see docs/scaling.md)
     session_id: Optional[str] = Field(
         None, description="Unique id for this session (e.g. UUID); used when grouping multiple recordings"
     )

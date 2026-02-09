@@ -42,7 +42,7 @@ agent-vcr --help
 
 You should see the CLI help showing `record`, `replay`, `diff`, and `inspect` commands.
 
-**TypeScript:** This tutorial uses the Python CLI and pytest. For the TypeScript/Node.js implementation, see [typescript/README.md](typescript/README.md). To run TypeScript tests: `cd typescript && npm install && npm run build && npm test`.
+**TypeScript:** This tutorial uses the Python CLI and pytest. For the TypeScript/Node.js implementation, see [../typescript/README.md](../typescript/README.md). To run TypeScript tests: `cd typescript && npm install && npm run build && npm test`.
 
 <details>
 <summary>Alternative: using pip (not recommended)</summary>
@@ -874,7 +874,7 @@ Replace `DEMO_ID` in `README.md` with the ID from the asciinema URL:
 
 ## Running tests (Python and TypeScript)
 
-- **Python:** From `python/`, run `pytest tests/ -v`. See [CONTRIBUTING.md](CONTRIBUTING.md#getting-started).
+- **Python:** From `python/`, run `pytest tests/ -v`. See [../CONTRIBUTING.md](../CONTRIBUTING.md#getting-started).
 - **TypeScript:** From `typescript/`, run `npm install`, `npm run build`, then `npm test`. See [typescript/README.md](typescript/README.md).
 
 ---
@@ -887,4 +887,4 @@ After completing these labs, you're ready to:
 2. **Add golden cassette tests** to your CI pipeline
 3. **Diff server versions** before deploying updates
 4. **Inject errors** to harden your client's error handling
-5. **Contribute to Agent VCR** — see [CONTRIBUTING.md](CONTRIBUTING.md)
+5. **Contribute to Agent VCR** — see [../CONTRIBUTING.md](../CONTRIBUTING.md)

@@ -8,13 +8,13 @@ This document covers the system design, data flow, design decisions, known limit
 
 ## System Overview
 
-![System Flow](assets/SystemOverview.jpg)
+![System Flow](../assets/SystemOverview.jpg)
 
 ## Layer Architecture
 
 The codebase is organized into four layers, each with a clear responsibility:
 
-![Layer Architecture](assets/LayerArchitecture.jpg)
+![Layer Architecture](../assets/LayerArchitecture.jpg)
 
 **Transport Layer** handles the raw communication protocol. `BaseTransport` defines the abstract interface; `StdioTransport` spawns a subprocess and proxies stdin/stdout; `SSETransport` runs an HTTP server and proxies Server-Sent Events. Each transport accepts message callbacks and forwards JSON-RPC messages bidirectionally.
 
@@ -140,11 +140,11 @@ The replayer supports five strategies for matching incoming requests to recorded
 
 **Why callback-based transport?** Decoupling. The transport layer doesn't know about recording or replaying; it just forwards messages and invokes callbacks. This lets the same transport code serve both MCPRecorder and future use cases.
 
-**Why single-session recordings?** Simplicity. MCP sessions have a clear lifecycle (initialize → interact → close). Multi-session recordings would add complexity for the primary use case; for large-scale, multi-MCP, and agent-to-agent evolution see **[SCALING.md](SCALING.md)**.
+**Why single-session recordings?** Simplicity. MCP sessions have a clear lifecycle (initialize → interact → close). Multi-session recordings would add complexity for the primary use case; for large-scale, multi-MCP, and agent-to-agent evolution see [scaling.md](scaling.md).
 
 ## Scaling: Multi-MCP and Agent-to-Agent
 
-Each recording file is one client↔server session. **Multi-MCP** and **agent-to-agent** are supported by recording multiple sessions (one `.vcr` each) with optional metadata (`session_id`, `endpoint_id`, `agent_id`) and replaying them as needed. See **[SCALING.md](SCALING.md)** for large-scale and single-process multi-session recorder / replay orchestrator.
+Each recording file is one client↔server session. **Multi-MCP** and **agent-to-agent** are supported by recording multiple sessions (one `.vcr` each) with optional metadata (`session_id`, `endpoint_id`, `agent_id`) and replaying them as needed. See [scaling.md](scaling.md) for large-scale and single-process multi-session recorder / replay orchestrator.
 
 ## Known Limitations and Future Work
 

@@ -30,8 +30,8 @@ Before releasing either implementation:
 - [ ] All tests pass (`pytest` for Python, `npm test` for TypeScript)
 - [ ] Type checking passes (`mypy --strict` for Python, `tsc --noEmit` for TypeScript)
 - [ ] Linting passes (`ruff check` for Python, `npm run lint` for TypeScript)
-- [ ] Documentation is up to date (README.md, ARCHITECTURE.md, examples)
-- [ ] CHANGELOG.md updated with release notes
+- [ ] Documentation is up to date (README.md, [architecture.md](architecture.md), examples)
+- [ ] [CHANGELOG.md](../CHANGELOG.md) updated with release notes
 - [ ] Version bumped in:
   - `python/pyproject.toml` (Python)
   - `typescript/package.json` (TypeScript)
@@ -219,7 +219,7 @@ jobs:
    - Python: `python/pyproject.toml`
    - TypeScript: `typescript/package.json`
 
-3. **Update CHANGELOG.md**
+3. **Update [CHANGELOG.md](../CHANGELOG.md)**
    - Document new features, bug fixes, breaking changes
    - Separate sections for Python and TypeScript if needed
 
@@ -249,7 +249,7 @@ jobs:
 
 7. **Announce**
    - GitHub Releases (one per language)
-   - Update main README.md if needed
+   - Update main [README.md](../README.md) if needed
 
 ### For a Major Release (Breaking Changes)
 

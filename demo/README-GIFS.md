@@ -1,6 +1,6 @@
 # Creating GIFs for All 12 Labs
 
-This guide explains how to record terminal sessions for each of the [TUTORIAL](../TUTORIAL.md) labs and convert them to GIFs (e.g. for docs or README).
+This guide explains how to record terminal sessions for each of the [tutorial](../docs/tutorial.md) labs and convert them to GIFs (e.g. for docs or README).
 
 ## Prerequisites
 
@@ -105,7 +105,7 @@ To show **correlation metadata** (multi-session / multi-MCP support) without imp
 # Record the demo (record with endpoint_id + session_id, then inspect)
 asciinema rec demo/correlation-demo.cast -c "bash demo/record-correlation-demo.sh"
 
-# Convert to GIF (e.g. for README or SCALING.md)
+# Convert to GIF (e.g. for README or docs/scaling.md)
 agg demo/correlation-demo.cast assets/correlation-demo.gif
 ```
 
