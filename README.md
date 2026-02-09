@@ -4,6 +4,7 @@
 
 Test MCP servers and clients without flaky live servers. **Mock MCP for testing**: record once, replay forever. No more "MCP server was down" or "rate limit" in CI — deterministic, fast, offline.
 
+[![Tests](https://github.com/jarvis2021/agent-vcr/actions/workflows/tests.yml/badge.svg)](https://github.com/jarvis2021/agent-vcr/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Node 18+](https://img.shields.io/badge/node-18+-green.svg)](https://nodejs.org/)
@@ -12,7 +13,8 @@ Test MCP servers and clients without flaky live servers. **Mock MCP for testing*
 
 Agent VCR is a testing framework for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io). It transparently records all JSON-RPC 2.0 interactions between an MCP client and server, then replays them deterministically — no real server needed. **Easier than rolling your own mocks:** one install, one command to record, one to replay. Golden cassettes in seconds.
 
-**Python and TypeScript are first-class.** The Python implementation has 190+ tests and a full CLI; the TypeScript implementation has 72 tests and is **npm-ready** (`@agent-vcr/core`) — ideal for the TypeScript-first MCP ecosystem, where most MCP servers and clients live. Recordings are cross-language: record with Python, replay with TypeScript (or the other way around). See [typescript/README.md](typescript/README.md).
+**Python and TypeScript are first-class.** The Python implementation has 190+ tests and a full CLI; the TypeScript implementation has 72 unit tests, full CLI, and is **npm-ready** (`@agent-vcr/core`) — ideal for the TypeScript-first MCP ecosystem, where most MCP servers and clients live. Recordings are cross-language: record with Python, replay with TypeScript (or the other way around). See [typescript/README.md](typescript/README.md).
+
 
 ## The Problem
 
@@ -44,12 +46,16 @@ Client ←→ Agent VCR ←→ Real Server    Client ←→ Agent VCR (mock)
 - **Safe**: Inject errors without modifying the real server
 - **Visible**: Diff two recordings to catch regressions before they ship
 
+**Result:** CI that used to be slow and flaky (live MCP server, timeouts, rate limits) becomes fast and deterministic — run in seconds, catch breaking changes before deploy.
+
 ## Real-World Use Cases
 
-**Open source MCP server authors:** Ship a `.vcr` cassette with your server so users can run their client tests without installing or running your server — a distribution story nobody else enables.  
-**Enterprises with multi-agent systems:** Many AI agents talking to many MCP servers? When server team A pushes a new version, the diff feature catches breaking changes before production. Platform teams use Agent VCR to gate deploys.  
-**CI/CD:** No more flaky tests because an MCP server was down, rate-limited, or slow. Record golden cassettes; tests run in milliseconds, deterministic every time.  
+**Open source MCP server authors:** Ship a `.vcr` cassette with your server so users can run their client tests without installing or running your server — a distribution story nobody else enables.
+**Enterprises with multi-agent systems:** Many AI agents talking to many MCP servers? When server team A pushes a new version, the diff feature catches breaking changes before production. Platform teams use Agent VCR to gate deploys.
+**CI/CD:** No more flaky tests because an MCP server was down, rate-limited, or slow. Record golden cassettes; tests run in milliseconds, deterministic every time.
 **Cost control:** MCP servers that call paid APIs? Record once — never burn quota again in tests.
+
+## Real-World Examples
 
 ### 1. Golden Cassette Testing
 Record a "known good" session, commit the `.vcr` file to your repo, and replay it in CI. If your code changes break the interaction pattern, the test fails immediately.
@@ -148,6 +154,8 @@ agent-vcr record --transport stdio --server-command "python demo/servers/calcula
 agent-vcr record --transport sse --server-url http://localhost:3000/sse -o session.vcr
 ```
 
+![First recording + inspect](assets/lab-1-record.gif)
+
 ### Replay as a mock server
 
 ```bash
@@ -157,6 +165,8 @@ agent-vcr replay --file session.vcr --transport stdio
 # Replay via HTTP+SSE
 agent-vcr replay --file session.vcr --transport sse --port 3100
 ```
+
+![Replay a recording as mock server](assets/lab-2-replay.gif)
 
 ### Diff two recordings
 
@@ -185,6 +195,41 @@ agent-vcr diff-batch pairs.json --fail-on-breaking
 ```bash
 agent-vcr inspect session.vcr
 agent-vcr inspect session.vcr --format table
+```
+
+## Match Strategies
+
+The replayer supports 5 matching strategies for finding recorded responses:
+
+| Strategy | Description | Use Case |
+|----------|-------------|----------|
+| `exact` | Full JSON match (excluding jsonrpc and id fields) | Strictest testing |
+| `method` | Match by method name only | Broad matching |
+| `method_and_params` | Match method + full params *(default)* | Standard testing |
+| `subset` | Match method + partial params (subset) | Flexible testing |
+| `sequential` | Return interactions in order | Ordered replay |
+
+*Note: The `fuzzy` strategy is deprecated; use `subset` instead. `fuzzy` is kept as an alias for backward compatibility.*
+
+## Replayer Features
+
+The replayer supports latency simulation for realistic testing:
+
+```bash
+# Simulate latency during replay
+agent-vcr replay --file session.vcr --simulate-latency
+
+# Scale recorded latencies (1.0 = original, 2.0 = double)
+agent-vcr replay --file session.vcr --simulate-latency --latency-multiplier 2.0
+```
+
+## Diff Features
+
+Enhanced diff capabilities:
+
+```bash
+# Compare latency between recordings
+agent-vcr diff baseline.vcr current.vcr --compare-latency
 ```
 
 ## Try It Now
@@ -340,17 +385,6 @@ pytest --vcr-record            # Record new cassettes
 pytest --vcr-dir=my_cassettes  # Custom cassette directory
 ```
 
-## Match Strategies
-
-The replayer supports 5 matching strategies for finding recorded responses:
-
-| Strategy | Description | Use Case |
-|----------|-------------|----------|
-| `exact` | Full JSON match (excluding jsonrpc and id fields) | Strictest testing |
-| `method` | Match by method name only | Broad matching |
-| `method_and_params` | Match method + full params *(default)* | Standard testing |
-| `fuzzy` | Match method + partial params (subset) | Flexible testing |
-| `sequential` | Return interactions in order | Ordered replay |
 
 ## VCR File Format
 
@@ -391,11 +425,12 @@ The Python implementation is **complete and tested** (190 tests). The TypeScript
 
 | Aspect | Python | TypeScript |
 |--------|--------|------------|
-| Status | Production-ready | Tested (unit tests) |
-| Tests | 190 tests passing | 72 tests passing |
-| CLI | Fully functional | Built |
-| Test framework | pytest plugin | Jest/Vitest integrations |
+| Status | Production-ready | 72 unit tests, source complete |
+| Tests | 190 tests passing | 72 unit tests in `tests/unit/` |
+| CLI | Fully functional | Fully functional |
+| Test framework | pytest plugin | Jest/Vitest (replay mode) |
 | Recording format | `.vcr` (JSON) | `.vcr` (JSON) — same format |
+| Recording mode in integrations | Implemented | Planned for v0.2.0 |
 
 **Cross-language recordings:** The `.vcr` format is plain JSON, so recordings created by Python are loadable by the TypeScript implementation.
 
@@ -490,6 +525,10 @@ npm test
 ### Creating demo GIFs
 
 Use [asciinema](https://asciinema.org) and [agg](https://github.com/asciinema/agg). See **[demo/README-GIFS.md](demo/README-GIFS.md)** for per-lab commands (`bash demo/make-lab-gifs.sh <1-12>`) and the correlation demo (`demo/record-correlation-demo.sh`).
+
+- **Record** (above): `assets/lab-1-record.gif` — from lab 1 (`make-lab-gifs.sh 1`), then `agg demo/lab-1.cast assets/lab-1-record.gif`.
+- **Replay** (above): `assets/lab-2-replay.gif` — from lab 2 (`asciinema rec demo/lab-2.cast -c "bash demo/make-lab-gifs.sh 2"`), then `agg demo/lab-2.cast assets/lab-2-replay.gif`.
+- **Diff** (Real-World Examples): `assets/lab-3-diff.gif`. **Correlation**: `assets/correlation-demo.gif` via `demo/record-correlation-demo.sh`.
 
 ### Run all tests (Python + TypeScript)
 
