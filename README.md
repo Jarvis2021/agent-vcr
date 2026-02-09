@@ -5,6 +5,8 @@
 Test MCP servers and clients without flaky live servers. **Mock MCP for testing**: record once, replay forever. No more "MCP server was down" or "rate limit" in CI — deterministic, fast, offline.
 
 [![Tests](https://github.com/jarvis2021/agent-vcr/actions/workflows/tests.yml/badge.svg)](https://github.com/jarvis2021/agent-vcr/actions/workflows/tests.yml)
+[![PyPI version](https://img.shields.io/pypi/v/agent-vcr.svg)](https://pypi.org/project/agent-vcr/)
+[![npm version](https://img.shields.io/npm/v/@agent-vcr/core.svg)](https://www.npmjs.com/package/@agent-vcr/core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Node 18+](https://img.shields.io/badge/node-18+-green.svg)](https://nodejs.org/)
