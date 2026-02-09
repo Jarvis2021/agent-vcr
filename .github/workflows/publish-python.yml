@@ -1,0 +1,43 @@
+# Publish Python package to PyPI on version tag (e.g. v0.1.0).
+# Requires repo secret: PYPI_API_TOKEN (PyPI API token, username __token__).
+
+name: Publish Python to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Create venv and install build tools
+        run: |
+          uv venv
+          uv pip install build twine
+
+      - name: Build package
+        run: python -m build
+
+      - name: Check artifacts
+        run: twine check dist/*
+
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: twine upload dist/*
