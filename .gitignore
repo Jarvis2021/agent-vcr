@@ -101,7 +101,13 @@ claude.md
 cursorrules.md
 .cursor/
 
-# Launch/marketing materials — not for public repo
+# Strategy / premium plan (do not expose)
+PREMIUM_PLAN.md
+
+# Publishing guide (private — PyPI/npm steps)
+docs/publishing.md
+
+# Launch / internal docs (blog, HN, social drafts)
 launch/
 
 # Demo GIF workflow outputs (make-lab-gifs.sh, asciinema rec, agg)
