@@ -94,3 +94,19 @@ See `agg --help` and [agg usage](https://docs.asciinema.org/manual/agg/usage).
 - **record-demo.sh** — single walkthrough (inspect, replay dry-run, diff, fail-on-breaking); used for the main README demo and Lab 12.
 
 The main repo demo GIF (`assets/demo.gif`) is typically made from `record-demo.sh`, not from the per-lab script.
+
+---
+
+## Correlation demo (--endpoint-id / --session-id)
+
+To show **correlation metadata** (multi-session / multi-MCP support) without implying the full orchestrator:
+
+```bash
+# Record the demo (record with endpoint_id + session_id, then inspect)
+asciinema rec demo/correlation-demo.cast -c "bash demo/record-correlation-demo.sh"
+
+# Convert to GIF (e.g. for README or SCALING.md)
+agg demo/correlation-demo.cast assets/correlation-demo.gif
+```
+
+The script records one session with `--endpoint-id filesystem` and `--session-id run-demo-*`, then runs `inspect` so the output shows Session ID and Endpoint ID in the metadata table.

@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node 18+](https://img.shields.io/badge/node-18+-blue.svg)](https://nodejs.org/)
 
-This is the TypeScript/Node.js implementation of Agent VCR. It provides the same functionality as the Python version with full cross-language compatibility — recordings created with Python can be replayed in TypeScript and vice versa.
+First-class TypeScript implementation for the MCP ecosystem. **72 tests** cover format, matcher, replayer, recorder, and diff. **npm-ready** as `@agent-vcr/core` (publish when you ship). Same functionality as the Python version with full cross-language compatibility — record with Python, replay with TypeScript (or the other way around). Ideal for teams that build MCP servers and clients in TypeScript/Node, where most of the MCP ecosystem lives.
 
 ## Installation
 

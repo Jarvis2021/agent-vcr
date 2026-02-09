@@ -1,19 +1,21 @@
 # Scaling Agent VCR: Large-Scale, Multi-MCP, and Agent-to-Agent
 
-This document describes how Agent VCR can evolve to support **large-scale** deployments, **multi-MCP server** flows, and **agent-to-agent** interactions, while staying backward compatible with today’s single-session model.
+This document describes the **implemented** scaling features and the design behind them: multi-MCP, agent-to-agent, indexing, and batch diff. It is the design and reference for "how we scale," not a future roadmap — everything below is in the repo today.
 
-## Current Scope (v0.1)
+Agent VCR supports **multi-MCP** and **agent-to-agent**: record multiple sessions (one `.vcr` per session), tag with `--session-id` / `--endpoint-id` / `--agent-id`, and replay each as needed. Indexing (`agent-vcr index` / `search`) and batch diff (`agent-vcr diff-batch`) work over many cassettes. Backward compatible with one `.vcr` per session.
+
+## Core scope (single session)
 
 - **One recording = one MCP session**: single client ↔ single server, one initialize handshake, one ordered list of interactions.
 - **One replayer per file**: each `.vcr` is replayed independently.
 - **Diff**: compares two recordings (e.g. baseline vs current server version).
 - **Best for**: golden cassette tests, compatibility gates, offline dev, single-agent single-server testing.
 
-Existing `.vcr` files and the CLI remain fully supported as we add scaling features.
+Existing `.vcr` files and the CLI remain fully supported.
 
 ---
 
-## Target Capabilities
+## Target capabilities (what we support today)
 
 ### 1. Large scale
 
@@ -49,37 +51,45 @@ All new fields are **optional**. Existing `.vcr` files remain valid.
 
 These can be set via CLI (`--session-id`, `--endpoint-id`, `--agent-id`) or programmatically when building recordings. Default: omit; single-session behavior unchanged.
 
-### Future: project / manifest (v0.3+)
+### Project manifest (implemented)
 
-- **Option A**: Directory with many `.vcr` files plus a manifest (e.g. `project.json`) listing `session_id`, `endpoint_id`, `file`, ordering hints.
-- **Option B**: Single “project” file (e.g. `.vcr-project`) that references multiple `.vcr` paths and metadata. Replay orchestrator loads the project and routes by `endpoint_id`.
+- Directory with many `.vcr` files plus a manifest (e.g. `project.json`) listing `session_id`, `endpoint_id`, `path`. CLI: `record-project`, `replay --project`, `diff --baseline-project` / `--current-project`.
 
-No change to the core `.vcr` schema is required for multi-session tooling; correlation is done via metadata and external manifest/project files.
+No change to the core `.vcr` schema; correlation is done via metadata and the manifest.
+
+---
+
+## Implemented tooling
+
+- **Single-session**: Per-request latency, threading.Lock, CLI `--session-id` / `--endpoint-id` / `--agent-id`.
+- **Multi-session**: Manifest load/save, `record-project`, `replay --project`, `diff --baseline-project` / `--current-project`.
+- **Indexing**: `agent-vcr index <dir> -o index.json`, `agent-vcr search index.json` (by method, endpoint_id, agent_id).
+- **Batch diff**: `agent-vcr diff-batch pairs.json` (multiple baseline/current pairs, single report, optional `--fail-on-breaking`).
+- **Agent-to-agent patterns**: Documented below (record both sides, replay one or both, use index/search/diff-batch for correlation).
 
 ---
 
-## Proposed Tooling Evolution
+## Agent-to-Agent Patterns
 
-### Phase 1 (v0.2) — Single-session hardening
+When **Agent A** talks to **Agent B** over MCP (A is the client, B exposes an MCP server), you can record and replay both sides so integration tests do not need live agents.
 
-- Per-request latency (fix interleaved-request inaccuracy).
-- Full notification capture in recorder.
-- Optional `asyncio.Lock` for shared state (thread-safety).
-- CLI: expose `--session-id`, `--endpoint-id`, `--agent-id` for metadata (wired to existing optional fields).
+### Recording both sides
 
-### Phase 2 (v0.3) — Multi-session recording and replay
+1. **Record Agent A client session** (A to B): run the recorder between A and B, tag with `--agent-id agent-a` and `--endpoint-id agent-b`. Save as e.g. `agent-a-to-b.vcr`.
+2. **Record Agent B server session** (B view of A requests): same flow from B perspective; tag with `--agent-id agent-b` and `--endpoint-id agent-a`. Save as e.g. `agent-b-from-a.vcr`.
 
-- **Multi-session recorder**: one process that runs multiple transports (e.g. one stdio + one SSE), each writing its own `.vcr` with `session_id` / `endpoint_id` set. Optional manifest file listing all recordings from the “run.”
-- **Replay orchestrator**: CLI or library that loads N recordings (or a project manifest), starts N replayers (stdio/SSE), and routes traffic by `endpoint_id` or port/path. Enables “replay the whole flow” for one client talking to multiple servers.
-- **Diff**: extend to compare two “projects” (e.g. two directories or two manifests) session-by-session by `session_id` / `endpoint_id`.
+One recorder run captures the single client-server stream; use `--agent-id` and `--endpoint-id` to identify client (agent) and server (endpoint).
 
-### Phase 3 (v0.4+) — Large-scale and agent-to-agent
+### Replaying both sides
 
-- **Indexing**: optional index (e.g. SQLite or JSON index) over many `.vcr` files for fast search (by method, endpoint, agent_id, date).
-- **Batch diff**: run many baseline/current pairs (e.g. from a matrix) and report a single compatibility report.
-- **Agent-to-agent**: use `agent_id` and `endpoint_id` to record and replay both sides of an agent↔agent MCP flow; document patterns (e.g. “record agent A’s client session and agent B’s server session, then replay both”).
+- **Replay one side:** Run `agent-vcr replay --file agent-a-to-b.vcr` so your test client (playing A role) talks to the replayer instead of B. No live B needed.
+- **Replay both:** Start two replayers (one per cassette), each on a different port or stdio. Connect Agent A to replayer 1 and Agent B to replayer 2. Both sides are deterministic from cassettes.
 
----
+### Correlation and indexing
+
+- Use `agent-vcr index <dir> -o index.json` then `agent-vcr search index.json --agent-id agent-a` or `--endpoint-id agent-b` to find recordings.
+- Use `agent-vcr diff-batch pairs.json --fail-on-breaking` to compare baseline vs current cassettes for multiple pairs in one report.
+
 
 ## Backward Compatibility
 
@@ -95,6 +105,7 @@ No change to the core `.vcr` schema is required for multi-session tooling; corre
 |---------------------|----------|
 | **Large scale**     | Many files + optional index; batch diff; streaming/chunking for huge sessions. |
 | **Multi-MCP**       | Optional `session_id` / `endpoint_id` in metadata; multi-session recorder; replay orchestrator that routes by endpoint. |
-| **Agent-to-agent**  | Optional `agent_id` and tags; record/replay both sides; orchestrated replay. |
+| **Agent-to-agent**  | Optional `agent_id` and tags; record/replay both sides; orchestrated replay (see Agent-to-Agent Patterns above). |
 
 We can scale the repo to handle large-scale, multi-MCP, and agent-to-agent workloads by adding optional metadata, then multi-session recorder and replay orchestrator, then indexing and batch operations—without breaking current single-session use.
+

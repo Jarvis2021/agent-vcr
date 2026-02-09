@@ -1,6 +1,7 @@
 """Session manager for tracking recording state and managing VCR lifecycle."""
 
 import asyncio
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
@@ -151,6 +152,7 @@ class SessionManager:
         request: JSONRPCRequest,
         response: Optional[JSONRPCResponse] = None,
         notifications: Optional[List[JSONRPCNotification]] = None,
+        request_timestamp: Optional[float] = None,
     ) -> VCRInteraction:
         """Record a single request/response interaction.
 
@@ -158,6 +160,7 @@ class SessionManager:
             request: The request message
             response: The response message (optional)
             notifications: List of notification messages (optional)
+            request_timestamp: Optional Unix timestamp when the request was received (for accurate per-request latency).
 
         Returns:
             The created VCRInteraction
@@ -180,13 +183,16 @@ class SessionManager:
         elif not isinstance(notifications, list):
             raise ValueError("notifications must be a list of JSONRPCNotification")
 
-        # Calculate latency
+        # Calculate latency: per-request when request_timestamp given, else time since last request
         now = datetime.now()
         latency_ms = 0.0
 
-        if self._last_request_time is not None and response is not None:
-            delta = now - self._last_request_time
-            latency_ms = delta.total_seconds() * 1000.0
+        if response is not None:
+            if request_timestamp is not None:
+                latency_ms = (time.time() - request_timestamp) * 1000.0
+            elif self._last_request_time is not None:
+                delta = now - self._last_request_time
+                latency_ms = delta.total_seconds() * 1000.0
 
         self._last_request_time = now
 
@@ -214,6 +220,7 @@ class SessionManager:
         request: JSONRPCRequest,
         response: Optional[JSONRPCResponse] = None,
         notifications: Optional[List[JSONRPCNotification]] = None,
+        request_timestamp: Optional[float] = None,
     ) -> VCRInteraction:
         """Record a single interaction asynchronously.
 
@@ -223,6 +230,7 @@ class SessionManager:
             request: The request message
             response: The response message (optional)
             notifications: List of notification messages (optional)
+            request_timestamp: Optional Unix timestamp when the request was received
 
         Returns:
             The created VCRInteraction
@@ -231,9 +239,8 @@ class SessionManager:
             RuntimeError: If not currently recording
             ValueError: If notifications is not a list
         """
-        # Run the synchronous method in a thread pool to avoid blocking
         return await asyncio.to_thread(
-            self.record_interaction, request, response, notifications
+            self.record_interaction, request, response, notifications, request_timestamp
         )
 
     def reset(self) -> None:

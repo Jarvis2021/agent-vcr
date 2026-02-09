@@ -2,15 +2,17 @@
 
 **Record, replay, and diff MCP interactions — like VCR for AI agents.**
 
+Test MCP servers and clients without flaky live servers. **Mock MCP for testing**: record once, replay forever. No more "MCP server was down" or "rate limit" in CI — deterministic, fast, offline.
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Node 18+](https://img.shields.io/badge/node-18+-green.svg)](https://nodejs.org/)
 
 ![Agent VCR Demo](assets/demo.gif)
 
-Agent VCR is a testing framework for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io). It transparently records all JSON-RPC 2.0 interactions between an MCP client and server, then replays them deterministically for testing — no real server needed.
+Agent VCR is a testing framework for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io). It transparently records all JSON-RPC 2.0 interactions between an MCP client and server, then replays them deterministically — no real server needed. **Easier than rolling your own mocks:** one install, one command to record, one to replay. Golden cassettes in seconds.
 
-The Python implementation is complete and production-ready. A TypeScript/Node.js port is available with a full test suite — see [typescript/README.md](typescript/README.md).
+**Python and TypeScript are first-class.** The Python implementation has 190+ tests and a full CLI; the TypeScript implementation has 72 tests and is **npm-ready** (`@agent-vcr/core`) — ideal for the TypeScript-first MCP ecosystem, where most MCP servers and clients live. Recordings are cross-language: record with Python, replay with TypeScript (or the other way around). See [typescript/README.md](typescript/README.md).
 
 ## The Problem
 
@@ -44,6 +46,11 @@ Client ←→ Agent VCR ←→ Real Server    Client ←→ Agent VCR (mock)
 
 ## Real-World Use Cases
 
+**Open source MCP server authors:** Ship a `.vcr` cassette with your server so users can run their client tests without installing or running your server — a distribution story nobody else enables.  
+**Enterprises with multi-agent systems:** Many AI agents talking to many MCP servers? When server team A pushes a new version, the diff feature catches breaking changes before production. Platform teams use Agent VCR to gate deploys.  
+**CI/CD:** No more flaky tests because an MCP server was down, rate-limited, or slow. Record golden cassettes; tests run in milliseconds, deterministic every time.  
+**Cost control:** MCP servers that call paid APIs? Record once — never burn quota again in tests.
+
 ### 1. Golden Cassette Testing
 Record a "known good" session, commit the `.vcr` file to your repo, and replay it in CI. If your code changes break the interaction pattern, the test fails immediately.
 
@@ -63,6 +70,8 @@ agent-vcr record --transport stdio --server-command "python demo/servers/calcula
 agent-vcr record --transport stdio --server-command "python demo/servers/calculator_v2.py" -o v2.vcr
 agent-vcr diff v1.vcr v2.vcr --fail-on-breaking
 ```
+
+![Diff demo](assets/lab-3-diff.gif)
 
 If `tools/call` changed its response schema, or a method was removed, the diff catches it and exits with code 1 — blocking the deploy.
 
@@ -154,6 +163,21 @@ agent-vcr replay --file session.vcr --transport sse --port 3100
 ```bash
 agent-vcr diff baseline.vcr current.vcr
 agent-vcr diff baseline.vcr current.vcr --format json --fail-on-breaking
+```
+
+### Index and search many cassettes
+
+```bash
+agent-vcr index recordings/ -o index.json
+agent-vcr search index.json --method tools/list
+agent-vcr search index.json --endpoint-id github
+```
+
+### Batch diff
+
+```bash
+# pairs.json: {"pairs": [{"baseline": "v1.vcr", "current": "v2.vcr"}, ...]}
+agent-vcr diff-batch pairs.json --fail-on-breaking
 ```
 
 ### Inspect a recording
@@ -363,21 +387,25 @@ Recordings use a JSON-based `.vcr` format:
 
 ## Python vs TypeScript
 
-The Python implementation is **complete and tested** (178 tests). The TypeScript/Node.js source code mirrors the same architecture but **has no tests yet** — it should be considered experimental.
+The Python implementation is **complete and tested** (190 tests). The TypeScript/Node.js port mirrors the same architecture and has a **full unit test suite** (72 tests).
 
 | Aspect | Python | TypeScript |
 |--------|--------|------------|
-| Status | Production-ready | Source only (untested) |
-| Tests | 178 tests passing | None yet |
-| CLI | Fully functional | Built, not verified |
-| Test framework | pytest plugin | Jest/Vitest plugins (untested) |
+| Status | Production-ready | Tested (unit tests) |
+| Tests | 190 tests passing | 72 tests passing |
+| CLI | Fully functional | Built |
+| Test framework | pytest plugin | Jest/Vitest integrations |
 | Recording format | `.vcr` (JSON) | `.vcr` (JSON) — same format |
 
-**Cross-language recordings:** The `.vcr` format is plain JSON, so recordings created by Python should be loadable by the TypeScript implementation once it's tested.
+**Cross-language recordings:** The `.vcr` format is plain JSON, so recordings created by Python are loadable by the TypeScript implementation.
 
 ## Scaling (Multi-MCP, Agent-to-Agent)
 
-Today each recording is one client↔server session. For **large-scale**, **multi-MCP**, and **agent-to-agent** flows we provide optional metadata (`--session-id`, `--endpoint-id`, `--agent-id`) and a roadmap. See **[SCALING.md](SCALING.md)** for the design and phased evolution (multi-session recorder, replay orchestrator, batch diff).
+We support **multi-MCP** and **agent-to-agent**: record multiple sessions (one `.vcr` per client↔server session), tag each with `--session-id`, `--endpoint-id`, and `--agent-id`, and correlate them in your tests or tooling. **Indexing** (`agent-vcr index`, `agent-vcr search`) and **batch diff** (`agent-vcr diff-batch`) let you work across many cassettes. For design and agent-to-agent patterns, see **[SCALING.md](SCALING.md)**.
+
+**Example — correlation metadata (record with endpoint/session ids, inspect shows them):**
+
+![Correlation metadata demo](assets/correlation-demo.gif)
 
 ## Architecture
 
@@ -397,6 +425,7 @@ python/src/agent_vcr/
 ├── recorder.py        # Transparent recording proxy
 ├── replayer.py        # Mock server from recordings
 ├── diff.py            # Recording comparison engine
+├── indexer.py         # Index/search many .vcr files
 ├── cli.py             # Command-line interface
 └── pytest_plugin.py   # Pytest integration
 ```
@@ -460,7 +489,7 @@ npm test
 
 ### Creating demo GIFs
 
-To record terminal GIFs for each of the 12 tutorial labs, use [asciinema](https://asciinema.org) and [agg](https://github.com/asciinema/agg). See **[demo/README-GIFS.md](demo/README-GIFS.md)** for instructions and **demo/make-lab-gifs.sh** for per-lab commands (`bash demo/make-lab-gifs.sh <1-12>`).
+Use [asciinema](https://asciinema.org) and [agg](https://github.com/asciinema/agg). See **[demo/README-GIFS.md](demo/README-GIFS.md)** for per-lab commands (`bash demo/make-lab-gifs.sh <1-12>`) and the correlation demo (`demo/record-correlation-demo.sh`).
 
 ### Run all tests (Python + TypeScript)
 

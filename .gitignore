@@ -104,5 +104,12 @@ cursorrules.md
 # Launch/marketing materials — not for public repo
 launch/
 
+# Demo GIF workflow outputs (make-lab-gifs.sh, asciinema rec, agg)
+demo/lab*.vcr
+demo/lab*.cast
+demo/lab*.gif
+demo/correlation-session.vcr
+demo/correlation-demo.cast
+
 # Root-level lock files (no root package.json)
 package-lock.json

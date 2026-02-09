@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import shlex
+import signal
 import sys
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,8 @@ from rich.syntax import Syntax
 
 from agent_vcr.core.format import VCRRecording
 from agent_vcr.diff import MCPDiff, MCPDiffResult
+from agent_vcr.indexer import build_index, search_index
+from agent_vcr.project import load_manifest, load_record_config, save_manifest
 from agent_vcr.recorder import MCPRecorder
 from agent_vcr.replayer import MCPReplayer
 
@@ -235,13 +238,182 @@ def record(
         raise click.ClickException(f"Recording failed: {e}")
 
 
+@cli.command("record-project")
+@click.option("--config", "-c", required=True, type=click.Path(exists=True), help="Path to project record config JSON")
+@click.option("--manifest-out", "-m", required=True, type=click.Path(), help="Output path for project manifest")
+def record_project(config: str, manifest_out: str) -> None:
+    """Run multiple recorders from a config file. Ctrl+C stops all and writes manifest."""
+    try:
+        config_dir = Path(config).resolve().parent
+        entries = load_record_config(config)
+        if not entries:
+            raise click.ClickException("Config has no recordings")
+        recorders: list[tuple[MCPRecorder, str]] = []
+        for e in entries:
+            transport = e.get("transport", "stdio")
+            server_command = e.get("server_command")
+            server_args = e.get("server_args") or []
+            if isinstance(server_command, str) and server_command:
+                parts = shlex.split(server_command)
+                cmd, args = parts[0], parts[1:] + list(server_args)
+            else:
+                cmd, args = None, []
+            rec = MCPRecorder(
+                transport=transport,
+                server_command=cmd,
+                server_args=args,
+                server_url=e.get("server_url"),
+                metadata_tags=e.get("tags") or {},
+                session_id=e.get("session_id"),
+                endpoint_id=e.get("endpoint_id"),
+                agent_id=e.get("agent_id"),
+            )
+            output = e["output"]
+            if not Path(output).is_absolute():
+                output = str(config_dir / output)
+            recorders.append((rec, output))
+        console.print("[bold green]Multi-session recorder[/bold green]")
+        for (r, out) in recorders:
+            console.print(f"  [cyan]{r._endpoint_id or out}[/cyan] -> {out}")
+        console.print("[yellow]Press Ctrl+C to stop all and write manifest.[/yellow]\n")
+
+        recs = [r for r, _ in recorders]
+
+        def _on_sigint(_sig: int, _frame: object) -> None:
+            for r in recs:
+                r.request_stop()
+
+        signal.signal(signal.SIGINT, _on_sigint)
+
+        async def run_all() -> None:
+            tasks = [asyncio.create_task(rec.record(out)) for rec, out in recorders]
+            await asyncio.gather(*tasks)
+
+        try:
+            asyncio.run(run_all())
+        except KeyboardInterrupt:
+            pass
+
+        save_manifest(manifest_out, [{"endpoint_id": r._endpoint_id or "", "session_id": r._session_id, "path": out} for (r, out) in recorders])
+        console.print(f"[green]Manifest written to {manifest_out}[/green]")
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Recording interrupted[/yellow]")
+        sys.exit(0)
+    except Exception as e:
+        raise click.ClickException(f"Record-project failed: {e}")
+
+
+def _replay_project(manifest_path: str, match_strategy: str, host: str, base_port: int) -> None:
+    """Run replay orchestrator: one SSE server per recording in the manifest."""
+    manifest_dir = Path(manifest_path).resolve().parent
+    recordings_list = load_manifest(manifest_path)
+    if not recordings_list:
+        raise click.ClickException("Manifest has no recordings")
+
+    replayers: list[tuple[str, MCPReplayer, int]] = []
+    for i, entry in enumerate(recordings_list):
+        path = entry["path"]
+        if not Path(path).is_absolute():
+            path = str(manifest_dir / path)
+        rec = VCRRecording.load(path)
+        r = MCPReplayer(rec, match_strategy=match_strategy)
+        port = base_port + i
+        replayers.append((entry.get("endpoint_id", "") or f"recording-{i}", r, port))
+
+    console.print("[bold green]Replay orchestrator[/bold green]")
+    for ep_id, r, p in replayers:
+        console.print(f"  [cyan]{ep_id}[/cyan] -> http://{host}:{p}/sse")
+    console.print("[yellow]Press Ctrl+C to stop all.[/yellow]\n")
+
+    async def run_all() -> None:
+        tasks = [r.serve_sse(host, port) for _, r, port in replayers]
+        await asyncio.gather(*tasks)
+
+    asyncio.run(run_all())
+
+
+def _diff_projects(
+    baseline_manifest: str,
+    current_manifest: str,
+    format: str,
+    fail_on_breaking: bool,
+) -> None:
+    """Compare two project manifests by endpoint_id; aggregate diff results."""
+    base_dir = Path(baseline_manifest).resolve().parent
+    cur_dir = Path(current_manifest).resolve().parent
+    base_list = load_manifest(baseline_manifest)
+    cur_list = load_manifest(current_manifest)
+    base_by_ep: dict[str, str] = {}
+    for e in base_list:
+        path = e["path"]
+        if not Path(path).is_absolute():
+            path = str(base_dir / path)
+        base_by_ep[e.get("endpoint_id", "")] = path
+    cur_by_ep: dict[str, str] = {}
+    for e in cur_list:
+        path = e["path"]
+        if not Path(path).is_absolute():
+            path = str(cur_dir / path)
+        cur_by_ep[e.get("endpoint_id", "")] = path
+
+    all_endpoints = sorted(set(base_by_ep) | set(cur_by_ep))
+    if not all_endpoints:
+        console.print("[yellow]No recordings in manifests.[/yellow]")
+        return
+
+    # Aggregate: merge all diffs into one result-like structure for output
+    total_added = 0
+    total_removed = 0
+    total_modified = 0
+    all_breaking: list[str] = []
+    per_endpoint: list[tuple[str, MCPDiffResult]] = []
+
+    for ep in all_endpoints:
+        base_path = base_by_ep.get(ep)
+        cur_path = cur_by_ep.get(ep)
+        if not base_path:
+            console.print(f"  [cyan]{ep}[/cyan]: only in current (all added)")
+            continue
+        if not cur_path:
+            console.print(f"  [cyan]{ep}[/cyan]: only in baseline (all removed)")
+            continue
+        try:
+            base_rec = VCRRecording.load(base_path)
+            cur_rec = VCRRecording.load(cur_path)
+            result = MCPDiff.compare(base_rec, cur_rec)
+            per_endpoint.append((ep, result))
+            total_added += len(result.added_interactions)
+            total_removed += len(result.removed_interactions)
+            total_modified += len(result.modified_interactions)
+            all_breaking.extend(result.breaking_changes)
+        except Exception as e:
+            console.print(f"  [red]{ep}[/red]: diff failed: {e}")
+
+    console.print("[bold green]Project diff[/bold green]")
+    console.print(f"  Baseline manifest: {baseline_manifest}")
+    console.print(f"  Current manifest:  {current_manifest}")
+    console.print()
+    for ep, result in per_endpoint:
+        console.print(f"  [cyan]{ep}[/cyan]: added={len(result.added_interactions)}, removed={len(result.removed_interactions)}, modified={len(result.modified_interactions)}, breaking={len(result.breaking_changes)}")
+    console.print()
+    console.print(f"  Total: added={total_added}, removed={total_removed}, modified={total_modified}, breaking={len(all_breaking)}")
+    if all_breaking:
+        console.print("[bold red]Breaking changes:[/bold red]")
+        for b in all_breaking[:20]:
+            console.print(f"    {b}")
+        if len(all_breaking) > 20:
+            console.print(f"    ... and {len(all_breaking) - 20} more")
+    if fail_on_breaking and all_breaking:
+        sys.exit(1)
+
+
 @cli.command()
 @click.option(
     "--file",
     "-f",
-    required=True,
+    required=False,
     type=click.Path(exists=True),
-    help="Path to the VCR recording file",
+    help="Path to the VCR recording file (omit when using --project)",
 )
 @click.option(
     "--transport",
@@ -266,20 +438,42 @@ def record(
     default=3100,
     help="Port to bind the replay server to (for sse transport)",
 )
+@click.option(
+    "--project",
+    type=click.Path(exists=True),
+    default=None,
+    help="Path to project manifest (multi-session replay). Uses SSE; one server per recording on consecutive ports.",
+)
+@click.option(
+    "--base-port",
+    type=int,
+    default=3100,
+    help="Base port for replay --project (first recording on base-port, next on base-port+1, ...)",
+)
 def replay(
     file: str,
     transport: str,
     match_strategy: str,
     host: str,
     port: int,
+    project: str | None,
+    base_port: int,
 ) -> None:
-    """Replay MCP interactions from a VCR file.
+    """Replay MCP interactions from a VCR file or a project manifest.
 
     Example:
         agent-vcr replay --file session.vcr --transport stdio
-        agent-vcr replay --file session.vcr --transport sse --host 127.0.0.1 --port 3100
+        agent-vcr replay --file session.vcr --transport sse --port 3100
+        agent-vcr replay --project project.json --base-port 3100
     """
     try:
+        if project:
+            _replay_project(project, match_strategy, host, base_port)
+            return
+
+        if not file:
+            raise click.ClickException("Either --file or --project is required")
+
         console.print(f"[bold green]Loading recording[/bold green]: {file}")
 
         # Load and validate recording
@@ -310,8 +504,20 @@ def replay(
 
 
 @cli.command()
-@click.argument("baseline", type=click.Path(exists=True))
-@click.argument("current", type=click.Path(exists=True))
+@click.argument("baseline", type=click.Path(exists=True), required=False)
+@click.argument("current", type=click.Path(exists=True), required=False)
+@click.option(
+    "--baseline-project",
+    type=click.Path(exists=True),
+    default=None,
+    help="Path to baseline project manifest (compare with --current-project)",
+)
+@click.option(
+    "--current-project",
+    type=click.Path(exists=True),
+    default=None,
+    help="Path to current project manifest (compare with --baseline-project)",
+)
 @click.option(
     "--format",
     type=click.Choice(["text", "json"]),
@@ -323,35 +529,45 @@ def replay(
     is_flag=True,
     help="Exit with code 1 if breaking changes are detected",
 )
-def diff(baseline: str, current: str, format: str, fail_on_breaking: bool) -> None:
-    """Compare two VCR recordings and detect differences.
+def diff(
+    baseline: str | None,
+    current: str | None,
+    baseline_project: str | None,
+    current_project: str | None,
+    format: str,
+    fail_on_breaking: bool,
+) -> None:
+    """Compare two VCR recordings or two project manifests.
 
     Example:
         agent-vcr diff baseline.vcr current.vcr
-        agent-vcr diff baseline.vcr current.vcr --format json --fail-on-breaking
+        agent-vcr diff --baseline-project base.json --current-project current.json
     """
     try:
+        if baseline_project and current_project:
+            _diff_projects(baseline_project, current_project, format, fail_on_breaking)
+            return
+
+        if not baseline or not current:
+            raise click.ClickException("Provide either (baseline, current) or (--baseline-project, --current-project)")
+
         console.print(f"[bold green]Loading recordings[/bold green]")
         console.print(f"  Baseline: {baseline}")
         console.print(f"  Current:  {current}")
 
-        # Load recordings
         baseline_recording = VCRRecording.load(baseline)
         current_recording = VCRRecording.load(current)
 
         console.print()
         console.print("[bold cyan]Comparing interactions...[/bold cyan]")
 
-        # Perform diff
         diff_result = MCPDiff.compare(baseline_recording, current_recording)
 
-        # Output results
         if format == "json":
             _output_diff_json(diff_result)
         else:
             _output_diff_text(diff_result)
 
-        # Handle exit code
         if fail_on_breaking and diff_result.breaking_changes:
             sys.exit(1)
 
@@ -440,6 +656,126 @@ def convert(input_file: str, output: str) -> None:
         raise click.ClickException(f"Conversion failed: {e}")
 
 
+@cli.command("index")
+@click.argument("directory", type=click.Path(exists=True, file_okay=False))
+@click.option(
+    "--output",
+    "-o",
+    required=True,
+    type=click.Path(),
+    help="Output path for the index JSON file",
+)
+@click.option(
+    "--pattern",
+    default="*.vcr",
+    help="Glob pattern for .vcr files (default: *.vcr)",
+)
+def index_cmd(directory: str, output: str, pattern: str) -> None:
+    """Build a searchable index over many .vcr files.
+
+    Scans DIRECTORY for .vcr files and writes an index with path, endpoint_id,
+    agent_id, recorded_at, methods, and interaction_count.
+
+    Example:
+        agent-vcr index recordings/ -o index.json
+    """
+    try:
+        count = build_index(directory, output, pattern=pattern)
+        console.print(f"[bold green]Indexed {count} recordings[/bold green] -> {output}")
+    except Exception as e:
+        raise click.ClickException(f"Index build failed: {e}")
+
+
+@cli.command()
+@click.argument("index_file", type=click.Path(exists=True))
+@click.option("--method", "-m", help="Filter by method name (e.g. tools/list)")
+@click.option("--endpoint-id", "-e", help="Filter by endpoint_id")
+@click.option("--agent-id", "-a", help="Filter by agent_id")
+def search(index_file: str, method: str | None, endpoint_id: str | None, agent_id: str | None) -> None:
+    """Search an index by method, endpoint_id, or agent_id.
+
+    Example:
+        agent-vcr search index.json --method tools/list
+    """
+    try:
+        matches = search_index(index_file, method=method, endpoint_id=endpoint_id, agent_id=agent_id)
+        if not matches:
+            console.print("[yellow]No matching recordings.[/yellow]")
+            return
+        for e in matches:
+            console.print(f"  [cyan]{e['path']}[/cyan]  endpoint={e.get('endpoint_id')}  methods={e.get('methods', [])}")
+    except Exception as e:
+        raise click.ClickException(f"Search failed: {e}")
+
+
+@cli.command("diff-batch")
+@click.argument("pairs_file", type=click.Path(exists=True))
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format",
+)
+@click.option(
+    "--fail-on-breaking/--no-fail-on-breaking",
+    default=False,
+    help="Exit with non-zero if any pair has breaking changes",
+)
+def diff_batch(pairs_file: str, fmt: str, fail_on_breaking: bool) -> None:
+    """Run diff on multiple baseline/current pairs and report.
+
+    PAIRS_FILE must be JSON: {"pairs": [{"baseline": "path1.vcr", "current": "path2.vcr"}, ...]}.
+
+    Example:
+        agent-vcr diff-batch pairs.json --fail-on-breaking
+    """
+    try:
+        with open(pairs_file, encoding="utf-8") as f:
+            data = json.load(f)
+        pairs = data.get("pairs", [])
+        if not pairs:
+            raise click.ClickException("pairs_file must contain a 'pairs' array")
+        results: list[dict[str, Any]] = []
+        any_breaking = False
+        for i, p in enumerate(pairs):
+            base = p.get("baseline")
+            curr = p.get("current")
+            if not base or not curr:
+                raise click.ClickException(f"pairs[{i}] must have 'baseline' and 'current'")
+            base_rec = VCRRecording.load(base)
+            curr_rec = VCRRecording.load(curr)
+            diff = MCPDiff()
+            result = diff.compare(base_rec, curr_rec)
+            any_breaking = any_breaking or (not result.is_compatible)
+            results.append({
+                "baseline": base,
+                "current": curr,
+                "is_identical": result.is_identical,
+                "is_compatible": result.is_compatible,
+                "breaking_changes": result.breaking_changes,
+            })
+        if fmt == "json":
+            console.print(JSON.from_str(json.dumps({"pairs": results}, indent=2)))
+        else:
+            for r in results:
+                console.print(f"\n[bold]Baseline:[/bold] {r['baseline']}  [bold]Current:[/bold] {r['current']}")
+                if r["is_identical"]:
+                    console.print("  [green]Identical[/green]")
+                elif r["is_compatible"]:
+                    console.print("  [yellow]Compatible but differ[/yellow]")
+                else:
+                    console.print("  [red]Breaking changes[/red]")
+                    for c in r["breaking_changes"]:
+                        console.print(f"    • {c}")
+            if any_breaking and fail_on_breaking:
+                raise SystemExit(1)
+    except FileNotFoundError as e:
+        raise click.ClickException(str(e))
+    except Exception as e:
+        raise click.ClickException(f"diff-batch failed: {e}")
+
+
 def _output_diff_text(diff_result: MCPDiffResult) -> None:
     """Output diff results in text format."""
     console.print()
@@ -482,6 +818,12 @@ def _output_inspect_text(recording: VCRRecording) -> None:
     console.print(f"  Version: {recording.metadata.version}")
     console.print(f"  Recorded: {recording.metadata.recorded_at}")
     console.print(f"  Tags: {json.dumps(recording.metadata.tags)}")
+    if recording.metadata.session_id:
+        console.print(f"  Session ID: {recording.metadata.session_id}")
+    if recording.metadata.endpoint_id:
+        console.print(f"  Endpoint ID: {recording.metadata.endpoint_id}")
+    if recording.metadata.agent_id:
+        console.print(f"  Agent ID: {recording.metadata.agent_id}")
 
     console.print()
     console.print("[bold cyan]Statistics[/bold cyan]")
@@ -515,12 +857,19 @@ def _output_inspect_json(recording: VCRRecording) -> None:
         method = interaction.request.method
         methods[method] = methods.get(method, 0) + 1
 
+    meta: dict[str, Any] = {
+        "version": recording.metadata.version,
+        "recorded_at": str(recording.metadata.recorded_at),
+        "tags": recording.metadata.tags,
+    }
+    if recording.metadata.session_id:
+        meta["session_id"] = recording.metadata.session_id
+    if recording.metadata.endpoint_id:
+        meta["endpoint_id"] = recording.metadata.endpoint_id
+    if recording.metadata.agent_id:
+        meta["agent_id"] = recording.metadata.agent_id
     output = {
-        "metadata": {
-            "version": recording.metadata.version,
-            "recorded_at": str(recording.metadata.recorded_at),
-            "tags": recording.metadata.tags,
-        },
+        "metadata": meta,
         "statistics": {
             "total_interactions": len(recording.session.interactions),
             "methods": methods,
@@ -536,6 +885,12 @@ def _output_inspect_table(recording: VCRRecording) -> None:
     metadata_table.add_row("Version", recording.metadata.version)
     metadata_table.add_row("Recorded", str(recording.metadata.recorded_at))
     metadata_table.add_row("Tags", json.dumps(recording.metadata.tags))
+    if recording.metadata.session_id:
+        metadata_table.add_row("Session ID", recording.metadata.session_id)
+    if recording.metadata.endpoint_id:
+        metadata_table.add_row("Endpoint ID", recording.metadata.endpoint_id)
+    if recording.metadata.agent_id:
+        metadata_table.add_row("Agent ID", recording.metadata.agent_id)
     console.print(metadata_table)
 
     console.print()

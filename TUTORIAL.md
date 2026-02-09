@@ -1,6 +1,6 @@
 # Agent VCR — Hands-On Tutorial
 
-Learn Agent VCR by doing. This tutorial walks you through every use case with real commands you can run on your machine.
+Learn Agent VCR by doing. This tutorial walks you through every use case with real commands you can run on your machine. **Use this when you want to test MCP servers or clients without a live server** — record once, replay in tests; no flaky CI, no mock wiring by hand.
 
 **Time:** ~30 minutes
 **Prerequisites:** Python 3.10+, [uv](https://docs.astral.sh/uv/) (recommended) or pip

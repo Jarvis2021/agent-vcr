@@ -144,7 +144,7 @@ The replayer supports five strategies for matching incoming requests to recorded
 
 ## Scaling: Multi-MCP and Agent-to-Agent
 
-The current design is single-session per recording. To scale to **large-scale**, **multi-MCP server**, and **agent-to-agent** flows, the repo adds optional metadata (`session_id`, `endpoint_id`, `agent_id`) and a documented roadmap. See **[SCALING.md](SCALING.md)** for the full plan (multi-session recorder, replay orchestrator, batch diff, indexing).
+Each recording file is one client↔server session. **Multi-MCP** and **agent-to-agent** are supported by recording multiple sessions (one `.vcr` each) with optional metadata (`session_id`, `endpoint_id`, `agent_id`) and replaying them as needed. See **[SCALING.md](SCALING.md)** for large-scale and single-process multi-session recorder / replay orchestrator.
 
 ## Known Limitations and Future Work
 

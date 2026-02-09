@@ -27,6 +27,7 @@ import asyncio
 import json
 import logging
 import os
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -170,6 +171,7 @@ class MCPRecorder:
         self._session_id = session_id
         self._endpoint_id = endpoint_id
         self._agent_id = agent_id
+        self._lock = threading.Lock()
 
         # Transport instance (set up during start)
         self._transport: Optional[StdioTransport | SSETransport] = None
@@ -354,8 +356,9 @@ class MCPRecorder:
 
             # Track request and timing
             if msg_id is not None:
-                self._pending_requests[msg_id] = request_obj
-                self._pending_request_times[msg_id] = time.time()
+                with self._lock:
+                    self._pending_requests[msg_id] = request_obj
+                    self._pending_request_times[msg_id] = time.time()
 
             # Log for debugging
             if method:
@@ -389,8 +392,9 @@ class MCPRecorder:
                 return message
 
             # Pair with pending request
-            request_obj = self._pending_requests.pop(msg_id, None)
-            request_time = self._pending_request_times.pop(msg_id, None)
+            with self._lock:
+                request_obj = self._pending_requests.pop(msg_id, None)
+                request_time = self._pending_request_times.pop(msg_id, None)
 
             if request_obj:
                 logger.debug(f"Server response: id={msg_id}")
@@ -428,9 +432,15 @@ class MCPRecorder:
                                 self._max_interactions,
                             )
                         else:
-                            self._session_manager.record_interaction(request_obj, response_obj)
+                            self._session_manager.record_interaction(
+                                request_obj, response_obj,
+                                request_timestamp=request_time,
+                            )
                     else:
-                        self._session_manager.record_interaction(request_obj, response_obj)
+                        self._session_manager.record_interaction(
+                            request_obj, response_obj,
+                            request_timestamp=request_time,
+                        )
             else:
                 logger.debug(f"Received response for unknown request id={msg_id}")
 
@@ -510,16 +520,18 @@ class MCPRecorder:
 
     def _evict_stale_pending_requests(self) -> None:
         """One-pass eviction of pending requests older than pending_timeout_seconds."""
-        now = time.time()
-        threshold = now - self._pending_timeout_seconds
-        evicted = [
-            msg_id
-            for msg_id, t in self._pending_request_times.items()
-            if t < threshold
-        ]
+        with self._lock:
+            now = time.time()
+            threshold = now - self._pending_timeout_seconds
+            evicted = [
+                msg_id
+                for msg_id, t in self._pending_request_times.items()
+                if t < threshold
+            ]
+            for msg_id in evicted:
+                self._pending_requests.pop(msg_id, None)
+                self._pending_request_times.pop(msg_id, None)
         for msg_id in evicted:
-            self._pending_requests.pop(msg_id, None)
-            self._pending_request_times.pop(msg_id, None)
             logger.warning(
                 "Evicted stale pending request id=%s (no response within %.0fs)",
                 msg_id,
